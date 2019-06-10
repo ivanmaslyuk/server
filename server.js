@@ -57,22 +57,24 @@ app.listen(8080, () => console.log('Server started on port'))
 
 
 syncService.watch('lie_detector', (message, deviceName, deviceType, userId) => {
-    console.log(syncService.getSessionState(userId))
-    syncService.sendMessageToDevice(deviceName, userId, {
+    console.log(syncService.getSessionStateForUser(userId))
+    syncService.sendMessageToDevice(deviceType, deviceName, userId, {
         source: 'lie_detector',
         event: 'player_lifted_finger'
     })
-    
+
 })
 
 syncService.watch('system', (message, deviceName, deviceType, userId) => {
     // отправвить в админку что устройство подключилось/отключилось
     switch (message.event) {
         case 'device_connected':
-            syncService.sendMessageToDevice('admin_console', userId, message)
+            if (deviceType != 'admin_console') {
+                syncService.sendMessageToDevice('admin_console', 'Admin Console', userId, message)
+            }
             break
         case 'device_disconnected':
-            syncService.sendMessageToDevice('admin_console', userId, message)
+            syncService.sendMessageToDevice('admin_console', 'Admin Console', userId, message)
             break
         /*case 'game_launched':
             // TODO: отправить на все мобильные

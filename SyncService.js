@@ -6,6 +6,7 @@ class SyncService {
     constructor() {
         this.apps = {}
         this.lastId = 1000
+        this.sessionCache = {}
     }
 
     /**
@@ -60,7 +61,7 @@ class SyncService {
 
             // Проверяем, можно ли сейчас подключить устройство этого типа. Закрываем сокет если нельзя. 
             // Добавляем в сокет имя.
-            const sessionState = this.getSessionState(userId)
+            const sessionState = this.getSessionStateForUser(userId)
             switch (payload.deviceType) {
                 case 'mobile':
                     // генерируем имя
@@ -85,6 +86,8 @@ class SyncService {
 
             ws.deviceType = payload.deviceType
             ws.userId = userId
+            
+            this._invalidateSessionCacheForUser(userId)
 
             ws.send(JSON.stringify({
                 source: 'system',
@@ -97,6 +100,7 @@ class SyncService {
             onHandshakeSucceeded()
         }
         catch (err) {
+            console.log(err)
             // обработка неправильного токена
             ws.send(JSON.stringify({
                 source: 'system',
@@ -134,7 +138,7 @@ class SyncService {
      * @param {string} messageString Строка с полученным сообщением.
      */
     _handleIncomingMessage(ws, messageString) {
-        let messageObject = {};
+        let messageObject = {}
         try {
             messageObject = JSON.parse(messageString)
         }
@@ -178,6 +182,8 @@ class SyncService {
             return
         }
 
+        this._invalidateSessionCacheForUser(ws.userId)
+
         for (const appName in this.apps) {
             const notificationHandler = this.apps[appName]
             const message = {
@@ -190,6 +196,43 @@ class SyncService {
             }
             notificationHandler(message, ws.deviceName, ws.deviceType, ws.userId)
         }
+    }
+
+    _invalidateSessionCacheForUser(userId) {
+        this.sessionCache[userId] = undefined
+    }
+
+    _getSessionCacheForUser(userId) {
+        if (this.sessionCache[userId]) {
+            return this.sessionCache[userId]
+        }
+
+        // считаем состояние
+        const cache = {
+            projector: undefined,
+            adminConsole: undefined,
+            mobile: []
+        }
+
+        for (const ws of this.wss.clients) {
+            if (ws.userId === userId) {
+                switch (ws.deviceType) {
+                    case 'mobile':
+                        cache.mobile.push(ws)
+                        break
+                    case 'projector':
+                        cache.projector = ws
+                        break
+                    case 'admin_console':
+                        cache.adminConsole = ws
+                        break
+                }
+            }
+        }
+
+        // кэшируем и возвращаем
+        this.sessionCache[userId] = cache
+        return cache
     }
 
     /**
@@ -227,29 +270,20 @@ class SyncService {
      * Возвращаемые данные включают имена подключенных устройств.
      * @param {string} userId Идентификатор пользователя, состояние сессии которого необходимо получить.
      */
-    getSessionState(userId) {
+    getSessionStateForUser(userId) {
+        const internalState = this._getSessionCacheForUser(userId)
+
         const result = {
             projector: undefined,
             adminConsole: undefined,
             mobile: []
         }
 
-        // находим устройства
-        for (const ws of this.wss.clients) {
-            if (ws.userId === userId) {
-                switch (ws.deviceType) {
-                    case 'mobile':
-                        result.mobile.push(ws.deviceName)
-                        break
-                    case 'projector':
-                        result.projector = ws.deviceName
-                        break
-                    case 'admin_console':
-                        result.adminConsole = ws.deviceName
-                        break
-                }
-            }
-        }
+        result.projector = (internalState.projector || {}).deviceName
+        result.adminConsole = (internalState.adminConsole || {}).deviceName
+        internalState.mobile.forEach((mobileDevice) => {
+            result.mobile.push(mobileDevice.deviceName)
+        })
 
         return result
     }
@@ -269,16 +303,28 @@ class SyncService {
      * @param {string} userId Идентификатор пользователя, владеющего устройством, на которое отправляется сообщение.
      * @param {object} message Сообщение, которое необходимо отправить.
      */
-    sendMessageToDevice(deviceName, userId, message) {
-        for (const ws of this.wss.clients) {
-            if (ws.userId === userId && ws.deviceName === deviceName) {
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify(message))
-                } else {
-                    // TODO: бросить ошибку
-                    ws.terminate()
+    sendMessageToDevice(deviceType, deviceName, userId, message) {
+        const internalSessionState = this._getSessionCacheForUser(userId)
+        const messageString = JSON.stringify(message)
+
+        switch (deviceType) {
+            case 'projector':
+                if (internalSessionState.projector) {
+                    internalSessionState.projector.send(messageString)
                 }
-            }
+                break
+            case 'admin_console':
+                if (internalSessionState.adminConsole) {
+                    internalSessionState.adminConsole.send(messageString)
+                }
+                break
+            case 'mobile':
+                internalSessionState.mobile.forEach((mobileDevice) => {
+                    if (mobileDevice.deviceName === deviceName) {
+                        mobileDevice.send(messageString)
+                    }
+                })
+                break
         }
     }
 }
