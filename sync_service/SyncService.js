@@ -1,6 +1,6 @@
 const WebSocket = require('ws')
-const getAccessTokenPayload = require('./AccessTokenChecker').getAccessTokenPayload
-const secretKey = require('./key').tokenKey
+const getAccessTokenPayload = require('../AccessTokenChecker').getAccessTokenPayload
+const secretKey = require('../key').tokenKey
 
 class SyncService {
     constructor() {
@@ -24,7 +24,7 @@ class SyncService {
     /**
      * Генерирует уникальный идентификатор для обозначения устройства.
      */
-    _genrateDeviceId() {
+    _genrateUniqueIdentifier() {
         this.lastId = this.lastId + 1
         return this.lastId
     }
@@ -61,11 +61,11 @@ class SyncService {
 
             // Проверяем, можно ли сейчас подключить устройство этого типа. Закрываем сокет если нельзя. 
             // Добавляем в сокет имя.
-            const sessionState = this.getSessionStateForUser(userId)
+            const sessionState = this.getSessionState(userId)
             switch (payload.deviceType) {
                 case 'mobile':
                     // генерируем имя
-                    const deviceId = this._genrateDeviceId()
+                    const deviceId = this._genrateUniqueIdentifier()
                     ws.deviceName = `${payload.deviceModel} (${deviceId})`
                     break
                 case 'projector':
@@ -235,6 +235,23 @@ class SyncService {
         return cache
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     /**
      * Инициализирует внутренний WebSocket-сервер и начинает прослушивание на данном порте.
      * @param {number} port Порт, на котором следует открыть WebSocket-сервер.
@@ -266,12 +283,12 @@ class SyncService {
     }
 
     /**
-     * Возвращает состояние сессии некоторого пользователя. 
+     * Возвращает состояние некоторой сессии. 
      * Возвращаемые данные включают имена подключенных устройств.
-     * @param {string} userId Идентификатор пользователя, состояние сессии которого необходимо получить.
+     * @param {string} sessionId Идентификатор сессии, состояние которой необходимо получить.
      */
-    getSessionStateForUser(userId) {
-        const internalState = this._getSessionCacheForUser(userId)
+    getSessionState(sessionId) {
+        const internalState = this._getSessionCacheForUser(sessionId)
 
         const result = {
             projector: undefined,
@@ -300,11 +317,11 @@ class SyncService {
     /**
      * Отправляет сообщение на некоторое устройство.
      * @param {string} deviceName Имя устройства, на которое необходимо отправить сообщение.
-     * @param {string} userId Идентификатор пользователя, владеющего устройством, на которое отправляется сообщение.
+     * @param {string} sessionId Идентификатор сессии, владеющей устройством, на которое отправляется сообщение.
      * @param {object} message Сообщение, которое необходимо отправить.
      */
-    sendMessageToDevice(deviceType, deviceName, userId, message) {
-        const internalSessionState = this._getSessionCacheForUser(userId)
+    sendMessageToDevice(deviceType, deviceName, sessionId, message) {
+        const internalSessionState = this._getSessionCacheForUser(sessionId)
         const messageString = JSON.stringify(message)
 
         switch (deviceType) {

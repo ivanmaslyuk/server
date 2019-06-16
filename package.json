@@ -10,10 +10,14 @@
   "license": "ISC",
   "dependencies": {
     "bcrypt": "^3.0.6",
+    "chai": "^4.2.0",
+    "chai-spies": "^1.0.0",
     "crypto": "^1.0.1",
     "express": "^4.17.0",
     "jsonwebtoken": "^8.5.1",
+    "mocha": "^6.1.4",
     "mongoose": "^5.5.10",
+    "nyc": "^14.1.1",
     "ws": "^7.0.0"
   }
 }

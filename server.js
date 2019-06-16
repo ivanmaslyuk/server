@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken')
 const key = require('./key')
 const User = require('./schemas/user')
 const db = require('./db')
-const SyncService = require('./SyncService')
+const SyncService = require('./sync_service/SyncService')
 const syncService = new SyncService()
 
 // MONGODB INITIALIZATION
@@ -56,25 +56,25 @@ app.listen(8080, () => console.log('Server started on port'))
 
 
 
-syncService.watch('lie_detector', (message, deviceName, deviceType, userId) => {
-    console.log(syncService.getSessionStateForUser(userId))
-    syncService.sendMessageToDevice(deviceType, deviceName, userId, {
+syncService.watch('lie_detector', (message, deviceName, deviceType, sessionId) => {
+    console.log(syncService.getSessionState(sessionId))
+    syncService.sendMessageToDevice(deviceType, deviceName, sessionId, {
         source: 'lie_detector',
         event: 'player_lifted_finger'
     })
 
 })
 
-syncService.watch('system', (message, deviceName, deviceType, userId) => {
+syncService.watch('system', (message, deviceName, deviceType, sessionId) => {
     // отправвить в админку что устройство подключилось/отключилось
     switch (message.event) {
         case 'device_connected':
             if (deviceType != 'admin_console') {
-                syncService.sendMessageToDevice('admin_console', 'Admin Console', userId, message)
+                syncService.sendMessageToDevice('admin_console', 'Admin Console', sessionId, message)
             }
             break
         case 'device_disconnected':
-            syncService.sendMessageToDevice('admin_console', 'Admin Console', userId, message)
+            syncService.sendMessageToDevice('admin_console', 'Admin Console', sessionId, message)
             break
         /*case 'game_launched':
             // TODO: отправить на все мобильные
