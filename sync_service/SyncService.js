@@ -1,6 +1,6 @@
 const WebSocket = require('ws')
 const getAccessTokenPayload = require('../AccessTokenChecker').getAccessTokenPayload
-const secretKey = require('../key').tokenKey
+// const secretKey = require('../key').tokenKey
 
 class SyncService {
     constructor() {
@@ -28,7 +28,7 @@ class SyncService {
         this.lastId = this.lastId + 1
         return this.lastId
     }
-    
+
     /**
      * Генерирует строку с ошибкой доступа, предназначенную для отправения клиенту.
      * @param {string} reason Повод отказа в доступе.
@@ -47,7 +47,7 @@ class SyncService {
      * @param {object} payload Данные о клиенте.
      * @param {function} onHandshakeSucceeded Обработчик события завершения handshake.
      */
-    async _performHandshake(ws, payload, onHandshakeSucceeded) {
+    _performHandshake(ws, payload, onHandshakeSucceeded) {
         try {
             // проверяем входные данные
             if (!payload.accessToken || !payload.deviceModel || !payload.deviceType
@@ -56,7 +56,7 @@ class SyncService {
             }
 
             // проверяем токен
-            const tokenPayload = await getAccessTokenPayload(payload.accessToken, secretKey)
+            const tokenPayload = getAccessTokenPayload(payload.accessToken)
             const userId = tokenPayload.userId
 
             // Проверяем, можно ли сейчас подключить устройство этого типа. Закрываем сокет если нельзя. 
@@ -86,7 +86,7 @@ class SyncService {
 
             ws.deviceType = payload.deviceType
             ws.userId = userId
-            
+
             this._invalidateSessionCacheForUser(userId)
 
             ws.send(JSON.stringify({
@@ -100,14 +100,20 @@ class SyncService {
             onHandshakeSucceeded()
         }
         catch (err) {
-            console.log(err)
-            // обработка неправильного токена
-            ws.send(JSON.stringify({
-                source: 'system',
-                event: 'access_denied',
-                payload: { reason: 'Invalid token.' }
-            }))
-            return ws.close()
+            if (err.name === 'JsonWebTokenError') {
+                // обработка неправильного токена
+                ws.send(JSON.stringify({
+                    source: 'system',
+                    event: 'access_denied',
+                    payload: { reason: 'Invalid token.' }
+                }))
+                return ws.close()
+            }
+            else {
+                console.log(err)
+                return ws.close()
+            }
+
         }
     }
 
@@ -142,7 +148,7 @@ class SyncService {
         try {
             messageObject = JSON.parse(messageString)
         }
-        catch(err) {
+        catch (err) {
             console.log(err)
             return
         }
@@ -152,6 +158,7 @@ class SyncService {
 
         if (messageObject.source === "device" && messageObject.event === "handshake") {
             return this._performHandshake(ws, messageObject.payload || {}, () => {
+                console.log('in handshake_succeeded')
                 this._notifyDeviceConnected(ws)
             })
         }
@@ -258,7 +265,7 @@ class SyncService {
      */
     listen(port) {
         this.wss = new WebSocket.Server({ port })
-        
+
         this.wss.on('listening', (ws) => {
             console.log(`SyncService listening on port ${port}`)
         })
@@ -344,6 +351,22 @@ class SyncService {
                 break
         }
     }
+
+    reserveSession(sessionId, newOwner) {
+
+    }
+
+    freeSession(sessionId, currentOwner) {
+
+    }
+
+    isSessionReserved(sessionId) {
+
+    }
+
+    getSessionOwner(sessionId) {
+
+    }
 }
 
-module.exports = SyncService
+module.exports = { SyncService }

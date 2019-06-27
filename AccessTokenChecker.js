@@ -1,28 +1,31 @@
 const jwt = require('jsonwebtoken')
 const UserModel = require('./models/user')
 
-function verifyToken(token, secretKey) {
+const tokenKey = "djghhhhuuwiwuefgdsgfsdguriwu" // СЕКРЕТНЫЙ КЛЮЧ
+
+/*function verifyToken(token) {
     return new Promise((resolve, reject) => {
         try {
-            jwt.verify(token, secretKey, (err, payload) => {
+            jwt.verify(token, tokenKey, (err, payload) => {
                 if (err) {
                     return reject(err)
                 }
-    
+
                 resolve(payload)
             })
         }
-        catch(err) {
+        catch (err) {
             reject(err)
         }
     })
-} 
+}*/
 
-exports.getUserCredentialsFromAccessToken = async (token, secretKey) => {
-    const payload = await verifyToken(token, secretKey)
-    return await UserModel.findById(payload.userId)
-}
+// exports.getUserCredentialsFromAccessToken = async (token, secretKey) => {
+//     const payload = await verifyToken(token, secretKey)
+//     return await UserModel.findById(payload.userId)
+// }
 
-exports.getAccessTokenPayload = async (token, secretKey) => {
-    return await verifyToken(token, secretKey)
+exports.getAccessTokenPayload = (token) => {
+    //return await verifyToken(token)
+    return jwt.verify(token, tokenKey)
 }
