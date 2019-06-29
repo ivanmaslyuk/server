@@ -92,10 +92,6 @@ describe('SyncService Test', () => {
         mockWSS = syncService.wss
     })
 
-    afterEach(() => {
-
-    })
-
     it('присылает ошибку, если сообщение пришло в приложение, которое не было запущено', () => {
         // подключаемся
         const connection = mockWSS.simulateConnection('ws-id')
@@ -117,6 +113,9 @@ describe('SyncService Test', () => {
     })
 
     it('не позволяет запускать приложение, если другое уже запущено', () => {
+        syncService.subscribe('app_one', AppController())
+        syncService.subscribe('app_two', AppController())
+
         // подключаемся
         const connection = mockWSS.simulateConnection('ws-id')
         connection.simulateMessage(HandshakeMessageWithPayload({
@@ -128,7 +127,7 @@ describe('SyncService Test', () => {
         // запускаем первое приложение
         connection.simulateMessage({
             source: 'device',
-            event: 'app_lauched',
+            event: 'app_launched',
             payload: {
                 name: 'app_one'
             }
@@ -138,9 +137,9 @@ describe('SyncService Test', () => {
         chai.spy.on(connection, 'send')
         connection.simulateMessage({
             source: 'device',
-            event: 'app_lauched',
+            event: 'app_launched',
             payload: {
-                name: 'app_one'
+                name: 'app_two'
             }
         })
 
@@ -175,8 +174,8 @@ describe('SyncService Test', () => {
         // отключаем админку
         chai.spy.on(phoneConnection, 'send')
         chai.spy.on(phoneConnection, 'close')
-        chai.spu.on(projectorConnection, 'send')
-        chai.spu.on(projectorConnection, 'close')
+        chai.spy.on(projectorConnection, 'send')
+        chai.spy.on(projectorConnection, 'close')
         adminConnection.simulateClose()
 
         // проверяем
@@ -304,7 +303,7 @@ describe('SyncService Test', () => {
     it('посылает события от приложения только обрабочику, подписавшемуся на него', () => {
         // зарегистрировать обработчик
         const appController = AppController()
-        syncService.subscibe('app', appController)
+        syncService.subscribe('app', appController)
 
         // подключить админку
         const adminConnection = mockWSS.simulateConnection('admin-ws')
@@ -317,7 +316,7 @@ describe('SyncService Test', () => {
         chai.spy.on(appController, ['appLaunched', 'handleEvent', 'appClosed'])
         adminConnection.simulateMessage({
             source: 'device',
-            event: 'app_lauched',
+            event: 'app_launched',
             payload: {
                 name: 'app'
             }
@@ -326,12 +325,12 @@ describe('SyncService Test', () => {
 
         // отправить сообщение в приложение
         const message1 = { source: 'app', event: 'some_event' }
-        adminConnection.simulateMessage()
+        adminConnection.simulateMessage(message1)
         expect(appController.handleEvent).to.have.been.called.with(message1, undefined, 'admin_console', adminConnection.sessionId)
 
         // отправить сообщение в другое приложение
         const message2 = { source: 'different_app', event: 'some_event' }
-        adminConnection.simulateMessage()
+        adminConnection.simulateMessage(message2)
         expect(appController.handleEvent).to.have.not.been.called.with(message2, undefined, 'admin_console', adminConnection.sessionId)
 
         // закрыть текущее приложение
@@ -345,7 +344,7 @@ describe('SyncService Test', () => {
     it('если админка отключилась, вызывает функцию sessionTerminated у текущего приложения', () => {
         // привязать обработчик
         const appController = AppController()
-        syncService.subscibe('app', appController)
+        syncService.subscribe('app', appController)
 
         // подключить админку
         const adminConnection = mockWSS.simulateConnection('admin-ws')
@@ -358,7 +357,7 @@ describe('SyncService Test', () => {
         chai.spy.on(appController, 'sessionTerminated')
         adminConnection.simulateMessage({
             source: 'device',
-            event: 'app_lauched',
+            event: 'app_launched',
             payload: {
                 name: 'app'
             }
@@ -414,7 +413,7 @@ describe('SyncService Test', () => {
     it('оповещает приложение о том, что устройство подключилось/отключилось', () => {
         // подключить обработчик
         const appController = AppController()
-        syncService.subscibe('app', appController)
+        syncService.subscribe('app', appController)
         chai.spy.on(appController, ['deviceDisconnected', 'deviceConnected'])
 
         // подключить админку
@@ -427,7 +426,7 @@ describe('SyncService Test', () => {
         // запустить приложение
         adminConnection.simulateMessage({
             source: 'device',
-            event: 'app_lauched',
+            event: 'app_launched',
             payload: {
                 name: 'app'
             }
@@ -439,11 +438,12 @@ describe('SyncService Test', () => {
             deviceType: 'mobile',
             sessionId: adminConnection.sessionId
         }))
-        expect(appController.deviceConnected).to.have.been.called.with(adminConnection.sessionId)
+        const deviceName = mobileConnection.deviceName
+        expect(appController.deviceConnected).to.have.been.called.with('mobile', deviceName, adminConnection.sessionId)
 
         // отключить телефон
         mobileConnection.simulateClose()
-        expect(appController.deviceDisconnected).to.have.been.called.with(adminConnection.sessionId)
+        expect(appController.deviceDisconnected).to.have.been.called.with('mobile', deviceName, adminConnection.sessionId)
     })
 
     it('отвечает ошибкой, если приложение попытались запустить не с админки', () => {
@@ -465,7 +465,7 @@ describe('SyncService Test', () => {
         chai.spy.on(mobileConnection, 'send')
         mobileConnection.simulateMessage({
             source: 'device',
-            event: 'app_lauched',
+            event: 'app_launched',
             payload: {
                 name: 'app'
             }

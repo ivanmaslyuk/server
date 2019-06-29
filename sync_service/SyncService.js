@@ -7,6 +7,9 @@ class SyncService {
         this.apps = {}
         this.lastId = 1000
         this.sessionCache = {}
+        this.sessionIdsForUserIds = {}
+        this.userIdsForSessionIds = {}
+        this.sessionOwners = {}
     }
 
     /**
@@ -41,6 +44,17 @@ class SyncService {
         })
     }
 
+    _accessGranted(payload) {
+        const o = {
+            source: 'system',
+            event: 'access_granted'
+        }
+        if (payload) {
+            o.payload = payload
+        }
+        return JSON.stringify(o)
+    }
+
     /**
      * Производит процесс рукопожатия (handshake) с данным вебсокетом если это возможно.
      * @param {WebSocket} ws WebSocket, с которым необходимо произвести handshake.
@@ -50,63 +64,98 @@ class SyncService {
     _performHandshake(ws, payload, onHandshakeSucceeded) {
         try {
             // проверяем входные данные
-            if (!payload.accessToken || !payload.deviceModel || !payload.deviceType
-                || !['mobile', 'admin_console', 'projector'].includes(payload.deviceType)) {
+            if (!['mobile', 'admin_console', 'projector'].includes(payload.deviceType)) {
+                // TODO: отправить AccessDeniedBecause('Unknown device type.')
                 return
             }
 
-            // проверяем токен
-            const tokenPayload = getAccessTokenPayload(payload.accessToken)
-            const userId = tokenPayload.userId
-
             // Проверяем, можно ли сейчас подключить устройство этого типа. Закрываем сокет если нельзя. 
             // Добавляем в сокет имя.
-            const sessionState = this.getSessionState(userId)
             switch (payload.deviceType) {
-                case 'mobile':
+                case 'mobile': {
+                    if (!payload.sessionId) {
+                        ws.send(this._accessDeniedBecause('Invalid session identifier.'))
+                        return ws.close()
+                    }
+
+                    // проверить, есть ли такая сессия
+                    const sessionState = this.getSessionState(payload.sessionId)
+                    if (!sessionState.adminConsole) {
+                        ws.send(this._accessDeniedBecause('Invalid session identifier.'))
+                        return ws.close()
+                    }
+
                     // генерируем имя
-                    const deviceId = this._genrateUniqueIdentifier()
-                    ws.deviceName = `${payload.deviceModel} (${deviceId})`
+                    const deviceModel = payload.deviceModel || 'Mobile Device'
+                    const devicePostfix = sessionState.mobile.length + 1 //this._genrateUniqueIdentifier()
+                    ws.deviceName = `${deviceModel} (${devicePostfix})`
+
+                    ws.deviceType = 'mobile'
+                    ws.sessionId = payload.sessionId
+                    this._invalidateSessionCache(payload.sessionId)
+                    ws.send(this._accessGranted({ yourName: ws.deviceName }))
                     break
-                case 'projector':
+                }
+                case 'projector': {
+                    if (!payload.sessionId) {
+                        ws.send(this._accessDeniedBecause('Invalid session identifier.'))
+                        return ws.close()
+                    }
+
+                    // проверить, есть ли такая сессия
+                    const sessionState = this.getSessionState(payload.sessionId)
+                    if (!sessionState.adminConsole) {
+                        ws.send(this._accessDeniedBecause('Invalid session identifier.'))
+                        return ws.close()
+                    }
+
                     if (sessionState.projector) {
                         ws.send(this._accessDeniedBecause('Projector already connected.'))
                         return ws.close()
                     }
-                    ws.deviceName = 'Projector'
+
+                    ws.deviceType = 'projector'
+                    ws.sessionId = payload.sessionId
+                    this._invalidateSessionCache(payload.sessionId)
+                    ws.send(this._accessGranted())
                     break
-                case 'admin_console':
-                    if (sessionState.adminConsole) {
-                        ws.send(this._accessDeniedBecause('Admin console already connected.'))
+                }
+                case 'admin_console': {
+                    // проверяем входные данные
+                    if (!payload.accessToken) {
+                        return ws.send(this._accessDeniedBecause('No access token was provided.'))
+                    }
+
+                    // проверяем токен
+                    const tokenPayload = getAccessTokenPayload(payload.accessToken)
+                    const userId = tokenPayload.userId
+
+                    // отправляем ошибку если сессия занята
+                    let sessionId = this.sessionIdsForUserIds[userId]
+                    if (sessionId) {
+                        ws.send(this._accessDeniedBecause('Maximum count of sessions has been reached.'))
                         return ws.close()
                     }
-                    ws.deviceName = 'Admin Console'
+
+                    // начать сессию
+                    sessionId = this._genrateUniqueIdentifier()
+                    this.sessionIdsForUserIds[userId] = sessionId
+
+                    ws.deviceType = 'admin_console'
+                    ws.sessionId = sessionId
+                    ws.userId = userId
+
+                    ws.send(this._accessGranted({ sessionId }))
                     break
-            }
-
-            ws.deviceType = payload.deviceType
-            ws.userId = userId
-
-            this._invalidateSessionCacheForUser(userId)
-
-            ws.send(JSON.stringify({
-                source: 'system',
-                event: 'access_granted',
-                payload: {
-                    yourName: ws.deviceName
                 }
-            }))
+            }
 
             onHandshakeSucceeded()
         }
         catch (err) {
             if (err.name === 'JsonWebTokenError') {
                 // обработка неправильного токена
-                ws.send(JSON.stringify({
-                    source: 'system',
-                    event: 'access_denied',
-                    payload: { reason: 'Invalid token.' }
-                }))
+                ws.send(this._accessDeniedBecause('Invalid token.'))
                 return ws.close()
             }
             else {
@@ -117,24 +166,98 @@ class SyncService {
         }
     }
 
+    _getCurrentApp(sessionId) {
+        const appName = this.sessionOwners[sessionId]
+        // return appName ? this.apps[appName] : undefined
+        if (appName) {
+            return this.apps[appName]
+        } else {
+            return undefined
+        }
+    }
+
     /**
      * Оповещает все приложения, что подключилось новое устройство.
      * @param {WebSocket} ws WebSocket, который подключился.
      */
     _notifyDeviceConnected(ws) {
-        // оповещаем всех, что подключилось устройство
-        for (const appName in this.apps) {
-            // вызываем обработчик приложения
-            const notificationHandler = this.apps[appName]
-            const deviceConnectedMessage = {
+        // если отключилась админка, оповещать еще некого
+        if (ws.deviceType === 'admin_console') { return }
+
+        // если подключилось моб. устройство или проектор, оповестить админку и текущее приложение
+
+        const adminConsoleConnection = this._getSessionCache(ws.sessionId).adminConsole
+        const currentApp = this._getCurrentApp(ws.sessionId)
+
+        if (ws.deviceType === 'mobile') {
+            // оповестить админку
+            const msg = {
                 source: 'system',
                 event: 'device_connected',
                 payload: {
-                    deviceName: ws.deviceName,
+                    deviceType: ws.deviceType,
+                    deviceName: ws.deviceName
+                }
+            }
+            adminConsoleConnection.send(JSON.stringify(msg))
+            // оповестить приложение
+            if (currentApp) {
+                currentApp.deviceConnected(ws.deviceType, ws.deviceName, ws.sessionId)
+            }
+        }
+
+        if (ws.deviceType === 'projector') {
+            // оповестить админку
+            const msg = {
+                source: 'system',
+                event: 'device_connected',
+                payload: {
                     deviceType: ws.deviceType
                 }
             }
-            notificationHandler(deviceConnectedMessage, ws.deviceName, ws.deviceType, ws.userId)
+            adminConsoleConnection.send(JSON.stringify(msg))
+            // оповестить приложение
+            if (currentApp) {
+                currentApp.deviceConnected(ws.deviceType, undefined, ws.sessionId)
+            }
+        }
+    }
+
+    _handleAppLaunched(ws, payload, sessionId) {
+        // позволять запускать только с админки
+        if (ws.deviceType !== 'admin_console') {
+            return ws.send(this._accessDeniedBecause('Applications can only be launched from the admin console.'))
+        }
+
+        // не позволять запускать второе приложение
+        if (this.sessionOwners[sessionId]) {
+            return ws.send(this._accessDeniedBecause('Session is already reserved by different app.'))
+        }
+
+        const appName = payload.name
+        const app = this.apps[appName]
+        if (app) {
+            // инициализировать сессию в приложении
+            app.appLaunched(sessionId, payload.args || {})
+            // занять sessionOwners[sessionId]
+            this.sessionOwners[sessionId] = appName
+        } else {
+            // если такого приложения не нашлось, не занимать сессию
+            // TODO: отправить ошибку
+        }
+    }
+
+    _handleCurrentAppClosed(sessionId) {
+        if (!this.sessionOwners[sessionId]) { return }
+        // закрыть сессию в приложении
+        const appName = this.sessionOwners[sessionId]
+        if (appName) {
+            const app = this.apps[appName]
+            delete this.sessionOwners[sessionId]
+            app.appClosed(sessionId)
+
+        } else {
+            // TODO: отправить ошибку, что никакого приложения запущено не было
         }
     }
 
@@ -150,33 +273,49 @@ class SyncService {
         }
         catch (err) {
             console.log(err)
+            // TODO: отправить ошибку 'Message was not valid JSON.'
             return
         }
 
         // проверяем целостность полученных от клиента данных
         if (!this._isMessageValid(messageObject)) return
 
+        // проводим авторизацию
         if (messageObject.source === "device" && messageObject.event === "handshake") {
             return this._performHandshake(ws, messageObject.payload || {}, () => {
-                console.log('in handshake_succeeded')
                 this._notifyDeviceConnected(ws)
             })
         }
 
         // проверяем, авторизован ли сокет
-        if (!ws.userId) {
+        if (!ws.sessionId) {
             ws.send(this._accessDeniedBecause('Unauthorized.'))
             return
         }
 
-        // перебираем все приложения и смотрим куда это можно отправить
-        for (const appName in this.apps) {
+        if (messageObject.source === "device" && messageObject.event === 'app_launched') {
+            return this._handleAppLaunched(ws, messageObject.payload, ws.sessionId)
+        }
+
+        if (messageObject.source === "device" && messageObject.event === 'current_app_closed') {
+            return this._handleCurrentAppClosed(ws.sessionId)
+        }
+
+        // передаем сообщение приложению
+        /*for (const appName in this.apps) {
             if (appName === messageObject.source) {
                 // вызываем обработчик приложения
                 const notificationHandler = this.apps[appName]
-                notificationHandler(messageObject, ws.deviceName, ws.deviceType, ws.userId)
+                notificationHandler(messageObject, ws.deviceName, ws.deviceType, ws.sessionId)
             }
+        }*/
+        const currentAppName = this.sessionOwners[ws.sessionId]
+        if (currentAppName !== messageObject.source) {
+            return ws.send(this._accessDeniedBecause('This app is not launched.'))
         }
+
+        const currentApp = this._getCurrentApp(ws.sessionId)
+        currentApp.handleEvent(messageObject, ws.deviceName, ws.deviceType, ws.sessionId)
     }
 
     /**
@@ -184,34 +323,81 @@ class SyncService {
      * @param {WebSocket} ws WebSocket, который отключился.
      */
     _handleClientClosed(ws) {
-        // проверяем, был ли авторизован сокет. если нет, не будем уведомлять о его отключении
-        if (!ws.userId) {
-            return
+        if (!ws.sessionId) { return }
+
+        const currentApp = this._getCurrentApp(ws.sessionId)
+        this._invalidateSessionCache(ws.sessionId)
+        const sessionCache = this._getSessionCache(ws.sessionId)
+
+        if (ws.deviceType === 'admin_console') {
+            // оповестить приложение
+            if (currentApp) {
+                currentApp.sessionTerminated(ws.sessionId)
+            }
+
+            // оповестить мобильные устройства и закрыть их сокеты
+            const msg = {
+                source: 'system',
+                event: 'session_terminated',
+                payload: { reason: 'Admin console disconnected unexpectedly.' }
+            }
+            sessionCache.mobile.forEach((ws) => {
+                ws.send(JSON.stringify(msg))
+                ws.close()
+            })
+
+            // оповестить проектор и закрыть его сокет
+            if (sessionCache.projector) {
+                sessionCache.projector.send(JSON.stringify(msg))
+                sessionCache.projector.close()
+            }
+
+            delete this.sessionOwners[ws.sessionId]
+            delete this.sessionIdsForUserIds[ws.sessionId]
         }
 
-        this._invalidateSessionCacheForUser(ws.userId)
+        if (ws.deviceType === 'mobile') {
+            if (currentApp) {
+                currentApp.deviceDisconnected(ws.deviceType, ws.deviceName, ws.sessionId)
+            }
 
-        for (const appName in this.apps) {
-            const notificationHandler = this.apps[appName]
-            const message = {
+            const msg = {
                 source: 'system',
                 event: 'device_disconnected',
                 payload: {
-                    deviceName: ws.deviceName,
-                    deviceType: ws.deviceType
+                    deviceType: 'mobile',
+                    deviceName: ws.deviceName
                 }
             }
-            notificationHandler(message, ws.deviceName, ws.deviceType, ws.userId)
+            sessionCache.adminConsole.send(JSON.stringify(msg))
+        }
+
+        if (ws.deviceType === 'projector') {
+            if (currentApp) {
+                currentApp.deviceDisconnected(ws.deviceType, undefined, ws.sessionId)
+            }
+
+            const msg = {
+                source: 'system',
+                event: 'device_disconnected',
+                payload: {
+                    deviceType: 'projector'
+                }
+            }
+            sessionCache.adminConsole.send(JSON.stringify(msg))
         }
     }
 
-    _invalidateSessionCacheForUser(userId) {
-        this.sessionCache[userId] = undefined
+    _invalidateSessionCache(sessionId) {
+        delete this.sessionCache[sessionId]
+        // const userId = this.userIdsForSessionIds[sessionId]
+        // delete this.sessionIdsForUserIds[userId]
+        // delete this.sessionOwners[sessionId]
     }
 
-    _getSessionCacheForUser(userId) {
-        if (this.sessionCache[userId]) {
-            return this.sessionCache[userId]
+    _getSessionCache(sessionId) {
+        if (this.sessionCache[sessionId]) {
+            return this.sessionCache[sessionId]
         }
 
         // считаем состояние
@@ -222,7 +408,7 @@ class SyncService {
         }
 
         for (const ws of this.wss.clients) {
-            if (ws.userId === userId) {
+            if (ws.sessionId === sessionId) {
                 switch (ws.deviceType) {
                     case 'mobile':
                         cache.mobile.push(ws)
@@ -238,7 +424,7 @@ class SyncService {
         }
 
         // кэшируем и возвращаем
-        this.sessionCache[userId] = cache
+        this.sessionCache[sessionId] = cache
         return cache
     }
 
@@ -295,7 +481,7 @@ class SyncService {
      * @param {string} sessionId Идентификатор сессии, состояние которой необходимо получить.
      */
     getSessionState(sessionId) {
-        const internalState = this._getSessionCacheForUser(sessionId)
+        const internalState = this._getSessionCache(sessionId)
 
         const result = {
             projector: undefined,
@@ -303,8 +489,8 @@ class SyncService {
             mobile: []
         }
 
-        result.projector = (internalState.projector || {}).deviceName
-        result.adminConsole = (internalState.adminConsole || {}).deviceName
+        result.projector = internalState.projector ? true : false
+        result.adminConsole = internalState.adminConsole ? true : false
         internalState.mobile.forEach((mobileDevice) => {
             result.mobile.push(mobileDevice.deviceName)
         })
@@ -317,7 +503,7 @@ class SyncService {
      * @param {string} appName Имя источника, на который необзодимо подписаться.
      * @param {function} notificationHandler Функция, обрабатывабщая будущие события в этом приложении.
      */
-    watch(appName, notificationHandler) {
+    subscribe(appName, notificationHandler) {
         this.apps[appName] = notificationHandler
     }
 
@@ -328,7 +514,7 @@ class SyncService {
      * @param {object} message Сообщение, которое необходимо отправить.
      */
     sendMessageToDevice(deviceType, deviceName, sessionId, message) {
-        const internalSessionState = this._getSessionCacheForUser(sessionId)
+        const internalSessionState = this._getSessionCache(sessionId)
         const messageString = JSON.stringify(message)
 
         switch (deviceType) {
@@ -350,22 +536,6 @@ class SyncService {
                 })
                 break
         }
-    }
-
-    reserveSession(sessionId, newOwner) {
-
-    }
-
-    freeSession(sessionId, currentOwner) {
-
-    }
-
-    isSessionReserved(sessionId) {
-
-    }
-
-    getSessionOwner(sessionId) {
-
     }
 }
 

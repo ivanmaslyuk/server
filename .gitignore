@@ -78,3 +78,5 @@ typings/
 
 .vs/
 .vscode/
+
+.eslintrc.json
