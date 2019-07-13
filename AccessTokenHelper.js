@@ -29,3 +29,7 @@ exports.getAccessTokenPayload = (token) => {
     //return await verifyToken(token)
     return jwt.verify(token, tokenKey)
 }
+
+exports.sign = (payload) => {
+    return jwt.sign(payload, tokenKey)
+}

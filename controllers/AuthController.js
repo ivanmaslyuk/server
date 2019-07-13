@@ -1,5 +1,6 @@
-const jwt = require('jsonwebtoken')
-const key = require('../key')
+// const jwt = require('jsonwebtoken')
+//const key = require('../key')
+const sign = require('../AccessTokenHelper').sign
 const UserModel = require('../models/user')
 
 exports.handleAuthRequest = async (req, res) => {
@@ -12,7 +13,7 @@ exports.handleAuthRequest = async (req, res) => {
         const user = await UserModel.findByEmail(req.body.email)
         user.comparePassword(req.body.password, (err, isMatch) => {
             if (isMatch) {
-                var token = jwt.sign({ userId: user.id }, key.tokenKey)
+                var token = sign({ userId: user.id })
                 res.status(200).json({
                     userId: user.id,
                     email: user.email,

@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 const mocha = require('mocha')
 const chai = require('chai')
 const chaiSpies = require('chai-spies')
@@ -9,7 +10,7 @@ const sandbox = chai.spy.sandbox()
 
 const MockWS = require('./MockWS')
 const MockAccessTokenChecker = require('./MockAccessTokenChecker')
-const SyncService = proxyquire('../../sync_service/SyncService', { 'ws': MockWS, '../AccessTokenChecker': MockAccessTokenChecker }).SyncService
+const SyncService = proxyquire('../../sync_service/SyncService', { 'ws': MockWS, '../AccessTokenHelper': MockAccessTokenChecker }).SyncService
 
 function AccessDeniedBecause(reason) {
     return {
@@ -474,6 +475,71 @@ describe('SyncService Test', () => {
         // проверить
         const expectedResponse = AccessDeniedBecause('Applications can only be launched from the admin console.')
         expect(mobileConnection.send).to.have.been.called.with(JSON.stringify(expectedResponse))
+    })
+
+    it('оповещает устройства о том, что было запущено/закрыто приложение', () => {
+        // зарегистрировать обработчик
+        const appController = AppController()
+        syncService.subscribe('app', appController)
+
+        // подключить админку
+        const adminConnection = mockWSS.simulateConnection('admin-ws')
+        adminConnection.simulateMessage(HandshakeMessageWithPayload({
+            deviceType: 'admin_console',
+            accessToken: 'VALID.ACCESS.TOKEN'
+        }))
+
+        // подключить мобильное устройство
+        const mobileConnection = mockWSS.simulateConnection('mobile-ws')
+        mobileConnection.simulateMessage(HandshakeMessageWithPayload({
+            deviceType: 'mobile',
+            sessionId: adminConnection.sessionId
+        }))
+        chai.spy.on(mobileConnection, 'send')
+
+        // подключить проектор
+        const projectorConnection = mockWSS.simulateConnection('projector-ws')
+        projectorConnection.simulateMessage(HandshakeMessageWithPayload({
+            deviceType: 'projector',
+            sessionId: adminConnection.sessionId
+        }))
+        chai.spy.on(projectorConnection, 'send')
+
+        // запустить приложение
+        adminConnection.simulateMessage({
+            source: 'device',
+            event: 'app_launched',
+            payload: {
+                name: 'app',
+                args: { key: 'val' }
+            }
+        })
+
+        // проверить
+        const appLaunchedMessage = {
+            source: 'system',
+            event: 'app_launched',
+            payload: {
+                name: 'app',
+                args: { key: 'val' }
+            }
+        }
+        expect(mobileConnection.send).to.have.been.called.with(JSON.stringify(appLaunchedMessage))
+        expect(projectorConnection.send).to.have.been.called.with(JSON.stringify(appLaunchedMessage))
+
+        // закрыть приложение
+        adminConnection.simulateMessage({
+            source: 'device',
+            event: 'current_app_closed'
+        })
+
+        // проверить
+        const appClosedMessage = {
+            source: 'system',
+            event: 'current_app_closed'
+        }
+        expect(mobileConnection.send).to.have.been.called.with(JSON.stringify(appClosedMessage))
+        expect(projectorConnection.send).to.have.been.called.with(JSON.stringify(appClosedMessage))
     })
 
 })
