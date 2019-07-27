@@ -3,8 +3,8 @@ const bodyParser = require('body-parser')
 const app = express()
 const User = require('./schemas/user')
 const db = require('./db')
-//const SyncService = require('./sync_service/SyncService')
-//const syncService = new SyncService()
+const SyncService = require('./sync_service/SyncService').SyncService
+const syncService = new SyncService()
 const getAccessTokenPayload = require('./AccessTokenHelper').getAccessTokenPayload
 
 // MONGODB INITIALIZATION
@@ -47,44 +47,34 @@ app.listen(8080, () => console.log(`Server started on port`))
 
 
 
-// syncService.watch('lie_detector', (message, deviceName, deviceType, sessionId) => {
-//     console.log(syncService.getSessionState(sessionId))
-//     syncService.sendMessageToDevice(deviceType, deviceName, sessionId, {
-//         source: 'lie_detector',
-//         event: 'player_lifted_finger'
-//     })
 
-// })
+syncService.subscribe('lie_detector', {
 
-// syncService.watch('system', (message, deviceName, deviceType, sessionId) => {
-//     // отправвить в админку что устройство подключилось/отключилось
-//     switch (message.event) {
-//         case 'device_connected':
-//             if (deviceType != 'admin_console') {
-//                 syncService.sendMessageToDevice('admin_console', 'Admin Console', sessionId, message)
-//             }
-//             break
-//         case 'device_disconnected':
-//             syncService.sendMessageToDevice('admin_console', 'Admin Console', sessionId, message)
-//             break
-//         /*case 'game_launched':
-//             // TODO: отправить на все мобильные
-//             syncService.sendMessageToDevice('')
-//             break
+    appLaunched: (sessionId, args) => {
+        console.log(`${sessionId} APP LAUNCHED with args:`)
+        console.log(args)
+    },
 
-//             Код выше не подходит, т.к. он не позволяет передать параметры начала игры (список вопросов, имя игрока).
-//             Наверно надо, чтобы его отправляла не система, а игра. Так игра сможет инициализировать у себя сессию для ее владельца.
-//             Новая идея: игру начинает устройство от своего имени. Хотя нет, лучше пусть от имени игры, чтобы это сообщене сразу шло
-//             в обработчик lie_detector и там инициализировалась сессия.
-//             {
-//                 source: 'device',
-//                 event: 'game_launched',
-//                 payload: {
-//                     game: 'lie_detector'
-//                 }
-//             }
-//         */
-//     }
-// })
+    appClosed: (sessionId) => {
+        console.log(`${sessionId} APP CLOSED`)
+    },
 
-// syncService.listen(3001)
+    sessionTerminated: (sessionId) => {
+        console.log(`${sessionId} SESSION TERMINATED`)
+    },
+
+    handleEvent: (message, deviceName, deviceType, sessionId) => {
+        console.log(`${sessionId} EVENT RECEIVED: ` + message.event + ` from ${deviceType} ${deviceName}`)
+    },
+
+    deviceConnected: (deviceType, deviceName, sessionId) => {
+        console.log(`${sessionId} DEVICE CONNECTED: ${deviceType} ${deviceName}`)
+    },
+
+    deviceDisconnected: (deviceType, deviceName, sessionId) => {
+        console.log(`${sessionId} DEVICE DISCONNECTED: ${deviceType} ${deviceName}`)
+    }
+
+})
+
+syncService.listen(3001)

@@ -26,16 +26,27 @@ function showView(name) {
     connectedView.style.display = name === 'connected' ? 'block' : 'none';
 }
 
-function showConnectView() { showView('connect') }
-function showConnectedView() { showView('connected') }
-function showLoadingView() { showView('loading') }
-function showDisconnectedView() { showView('disconnected') }
-function showAppView() { showView('app') }
+function showConnectView() { showView('connect'); }
+function showConnectedView() { showView('connected'); }
+function showLoadingView() { showView('loading'); }
+function showDisconnectedView() { showView('disconnected'); }
+function showAppView() { showView('app'); }
+
+/**
+ * Возвращает тип устройства, на котором запущен скрипт - 'mobile', 'admin_console' или 'projector'.
+ */
+function getDeviceType() {
+    var deviceType = document.body.getAttribute('data-device-type');
+    if (!deviceType) {
+        console.warn('Device type not specified in the body tag.');
+    }
+    return deviceType
+}
 
 /**
  * Отправляет сообщение серверу от имени запущенного приложения.
- * @param {string} event 
- * @param {object} payload 
+ * @param {string} event Имя события.
+ * @param {object} payload Аргументы события.
  */
 function raiseEvent(event, payload) {
 

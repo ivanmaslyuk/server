@@ -251,7 +251,12 @@ function _handleAppLaunched(ws, payload, sessionId) {
     }
 }
 
-function _handleCurrentAppClosed(sessionId) {
+function _handleCurrentAppClosed(ws, sessionId) {
+    // позволять запускать только с админки
+    if (ws.deviceType !== 'admin_console') {
+        return ws.send(_accessDeniedBecause('Applications can only be closed from the admin console.'))
+    }
+
     if (!this.sessionOwners[sessionId]) { return }
     // закрыть сессию в приложении
     const appName = this.sessionOwners[sessionId]
@@ -308,12 +313,20 @@ function _handleIncomingMessage(ws, messageString) {
         return
     }
 
-    if (messageObject.source === "device" && messageObject.event === 'app_launched') {
-        return _handleAppLaunched.call(this, ws, messageObject.payload, ws.sessionId)
-    }
 
-    if (messageObject.source === "device" && messageObject.event === 'current_app_closed') {
-        return _handleCurrentAppClosed.call(this, ws.sessionId)
+
+    if (messageObject.source == "device") {
+        if (messageObject.event === 'app_launched') {
+            return _handleAppLaunched.call(this, ws, messageObject.payload, ws.sessionId)
+        }
+
+        if (messageObject.event === 'current_app_closed') {
+            return _handleCurrentAppClosed.call(this, ws, ws.sessionId)
+        }
+
+        // возвращаем, потому что если event равен чему-то другому, кроме того,
+        // что выше, то код пойдет дальше и device будет считаться приложением
+        return
     }
 
     // передаем сообщение приложению
@@ -362,9 +375,17 @@ function _handleClientClosed(ws) {
 
         delete this.sessionOwners[ws.sessionId]
         delete this.sessionIdsForUserIds[ws.sessionId]
+        delete this.sessionIdsForUserIds[ws.userId]
     }
 
     if (ws.deviceType === 'mobile') {
+        if (!sessionCache.adminConsole) {
+            // игнорируем случаи, когда устройство было отключено по причине отключения админка
+            return
+        }
+
+        // TODO: обработать случай, когда приложение было отключено другим приложением, но админка все еще не подключена (?)
+
         if (currentApp) {
             currentApp.deviceDisconnected(ws.deviceType, ws.deviceName, ws.sessionId)
         }
@@ -377,10 +398,18 @@ function _handleClientClosed(ws) {
                 deviceName: ws.deviceName
             }
         }
+
         sessionCache.adminConsole.send(JSON.stringify(msg))
     }
 
     if (ws.deviceType === 'projector') {
+        if (!sessionCache.adminConsole) {
+            // игнорируем случаи, когда устройство было отключено по причине отключения админка
+            return
+        }
+
+        // TODO: обработать случай, когда приложение было отключено другим приложением, но админка все еще не подключена (?)
+
         if (currentApp) {
             currentApp.deviceDisconnected(ws.deviceType, undefined, ws.sessionId)
         }
@@ -398,9 +427,6 @@ function _handleClientClosed(ws) {
 
 function _invalidateSessionCache(sessionId) {
     delete this.sessionCache[sessionId]
-    // const userId = this.userIdsForSessionIds[sessionId]
-    // delete this.sessionIdsForUserIds[userId]
-    // delete this.sessionOwners[sessionId]
 }
 
 function _getSessionCache(sessionId) {
