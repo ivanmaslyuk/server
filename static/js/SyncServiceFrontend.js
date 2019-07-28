@@ -1,36 +1,21 @@
-var connectView = document.getElementById('connect_view');
-var connectedView = document.getElementById('connected_view');
-var loadingView = document.getElementById('loading_view');
-var disconnectedView = document.getElementById('disconnected_view');
-var appView = document.getElementById('app_view');
-var app = {};
+var WS_HOST = 'ws://127.9.0.1:3001';
 
-function setAppHTML(html) {
-    appView.innerHTML = html;
+var onMessasgeCallback = null;
+var onSessionTerminatedCallback = null;
+var onConnectionErrorCallback = null;
+
+function onMessasge(callback) {
+    // callback вызывается с аргументами (event, payload)
+    onMessasgeCallback = callback;
 }
 
-function setAppJS(js) {
-    eval(js);
+function onSessionTerminated(callback) {
+    onSessionTerminatedCallback = callback;
 }
 
-function resetApp() {
-    appView.innerHTML = '';
-    app = {};
+function onConnectionError(callback) {
+    onConnectionErrorCallback = callback;
 }
-
-function showView(name) {
-    connectView.style.display = name === 'connect' ? 'block' : 'none';
-    loadingView.style.display = name === 'loading' ? 'block' : 'none';
-    disconnectedView.style.display = name === 'disconnected' ? 'block' : 'none';
-    appView.style.display = name === 'app' ? 'block' : 'none';
-    connectedView.style.display = name === 'connected' ? 'block' : 'none';
-}
-
-function showConnectView() { showView('connect'); }
-function showConnectedView() { showView('connected'); }
-function showLoadingView() { showView('loading'); }
-function showDisconnectedView() { showView('disconnected'); }
-function showAppView() { showView('app'); }
 
 /**
  * Возвращает тип устройства, на котором запущен скрипт - 'mobile', 'admin_console' или 'projector'.
@@ -38,9 +23,13 @@ function showAppView() { showView('app'); }
 function getDeviceType() {
     var deviceType = document.body.getAttribute('data-device-type');
     if (!deviceType) {
-        console.warn('Device type not specified in the body tag.');
+        console.error('Device type not specified in the body tag.');
     }
     return deviceType
+}
+
+function connect(callback, sessionId) {
+    // sessionId передается только на проекторе и мобильном устройстве
 }
 
 /**
@@ -48,6 +37,6 @@ function getDeviceType() {
  * @param {string} event Имя события.
  * @param {object} payload Аргументы события.
  */
-function raiseEvent(event, payload) {
-
+function sendMessage(event, payload) {
+    // вызвать callback с аргументами (succeeded)
 }
