@@ -93,6 +93,7 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
 
                 // проверить, есть ли такая сессия
                 const sessionState = this.getSessionState(payload.sessionId)
+                console.log(sessionState)
                 if (!sessionState.adminConsole) {
                     ws.send(_accessDeniedBecause('Invalid session identifier.'))
                     return ws.close()
@@ -135,6 +136,9 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
                 ws.userId = userId
 
                 ws.send(_accessGranted({ sessionId }))
+                console.log(this.sessionCache)
+                console.log(this.sessionIdsForUserIds)
+                console.log(this.sessionOwners)
                 break
             }
         }
@@ -374,7 +378,6 @@ function _handleClientClosed(ws) {
         }
 
         delete this.sessionOwners[ws.sessionId]
-        delete this.sessionIdsForUserIds[ws.sessionId]
         delete this.sessionIdsForUserIds[ws.userId]
     }
 

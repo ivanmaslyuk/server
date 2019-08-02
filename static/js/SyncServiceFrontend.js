@@ -1,20 +1,10 @@
-var WS_HOST = 'ws://127.9.0.1:3001';
 
-var onMessasgeCallback = null;
-var onSessionTerminatedCallback = null;
-var onConnectionErrorCallback = null;
 
-function onMessasge(callback) {
-    // callback вызывается с аргументами (event, payload)
-    onMessasgeCallback = callback;
-}
-
-function onSessionTerminated(callback) {
-    onSessionTerminatedCallback = callback;
-}
-
-function onConnectionError(callback) {
-    onConnectionErrorCallback = callback;
+function getCookie(name) {
+    var matches = document.cookie.match(new RegExp(
+        "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+    ));
+    return matches ? decodeURIComponent(matches[1]) : undefined;
 }
 
 /**
@@ -25,11 +15,115 @@ function getDeviceType() {
     if (!deviceType) {
         console.error('Device type not specified in the body tag.');
     }
-    return deviceType
+    return deviceType;
 }
 
-function connect(callback, sessionId) {
-    // sessionId передается только на проекторе и мобильном устройстве
+function getDeviceModel() {
+    return 'Mobile Device'
+}
+
+
+/******************************* PRIVATE MEMBERS *******************************/
+
+
+function _handleWSMessage(message) {
+    if (message.source === 'system' && message.event === 'access_granted') {
+        if (this.handshakeCallback) {
+            this.handshakeCallback(message.payload || {})
+        }
+        return
+    }
+
+    if (message.source === 'system' && message.event === 'access_denied') {
+        if (message.payload.reason === 'Invalid session identifier.') {
+            if (this.handshakeCallback) {
+                this.handshakeCallback(undefined, 'WRONG_SESSION_ID')
+            }
+            return
+        }
+    }
+
+    if (message.source === 'system' && message.event === 'session_terminated') {
+        if (this.onSessionTerminated) {
+            this.onSessionTerminated()
+        }
+        return
+    }
+
+    try {
+        this.onMessage(message)
+    } catch (err) {
+        console.log('onMessage is not set.')
+    }
+}
+
+function _performHandshake(sessionId) {
+    var deviceType = getDeviceType();
+
+    var handshakeMessage = {
+        source: 'device',
+        event: 'handshake',
+        payload: {
+            deviceType,
+        },
+    };
+
+    if (deviceType === 'mobile') {
+        if (!sessionId) {
+            return console.error('No session id was passed. Cannot perform handshake.');
+        }
+
+        handshakeMessage.payload.sessionId = sessionId;
+        handshakeMessage.payload.deviceModel = getDeviceModel();
+    }
+
+    if (deviceType === 'projector') {
+        if (!sessionId) {
+            return console.error('No session id was passed. Cannot perform handshake.');
+        }
+
+        handshakeMessage.payload.sessionId = sessionId;
+    }
+
+    if (deviceType === 'admin_console') {
+        var accessToken = getCookie('accessToken');
+        if (!accessToken) {
+            return console.error('No access token found in cookies. Cannot perform handshake.');
+        }
+
+        handshakeMessage.payload.accessToken = accessToken;
+    }
+
+    var messageString = JSON.stringify(handshakeMessage)
+    this.socket.send(messageString);
+}
+
+
+/******************************* CLASS DEFINITION *******************************/
+
+
+function SyncServiceFrontend(host, port) {
+    this.host = host;
+    this.port = port;
+    this.onMessage = null;
+    this.onSessionTerminated = null;
+    this.onConnectionError = null;
+    this.handshakeCallback = null;
+    this.socket = null;
+}
+
+SyncServiceFrontend.prototype.connect = function (callback, sessionId) {
+    this.handshakeCallback = callback;
+    this.socket = new WebSocket(`ws://${this.host}:${this.port}`);
+    this.socket.onopen = () => _performHandshake.call(this, sessionId);
+    this.socket.onmessage = (event) => _handleWSMessage.call(this, JSON.parse(event.data));
+    this.socket.onerror = () => {
+        console.error('WS CONNECTION ERROR');
+        if (this.onConnectionError) {
+            this.onConnectionError();
+        }
+    };
+    this.socket.onclose = () => console.error('WS CLOSED');
 }
 
 /**
@@ -37,6 +131,9 @@ function connect(callback, sessionId) {
  * @param {string} event Имя события.
  * @param {object} payload Аргументы события.
  */
-function sendMessage(event, payload) {
+SyncServiceFrontend.prototype.sendMessage = function (message) {
     // вызвать callback с аргументами (succeeded)
+    if (this.socket) {
+        this.socket.send(JSON.stringify(message));
+    }
 }

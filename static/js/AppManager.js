@@ -35,3 +35,30 @@ function showDisconnectedView() { showView('disconnected'); }
 function showAppView() { showView('app'); }
 function showErrorView() { showView('error'); }
 
+
+
+
+// пример использования SyncServiceFrontend (удалить)
+
+var printSuccess = function (payload, err) {
+    console.log(err ? err : 'HANDSHAKE SUCCEEDED')
+    console.log(payload);
+}
+
+function onMessage(m) {
+    console.log(m);
+}
+
+function onSessionTerminated() {
+    console.error('SESSION TERMINATED');
+}
+
+function onConnectionError() {
+    console.error('CONNECTION ERROR');
+}
+
+var syncService = new SyncServiceFrontend('127.0.0.1', 3001);
+syncService.onMessage = onMessage;
+syncService.onSessionTerminated = onSessionTerminated;
+syncService.onConnectionError = onConnectionError;
+syncService.connect(printSuccess, 1002);

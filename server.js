@@ -52,7 +52,7 @@ syncService.subscribe('lie_detector', {
 
     appLaunched: (sessionId, args) => {
         console.log(`${sessionId} APP LAUNCHED with args:`)
-        console.log(args)
+        console.log('lie_detector APP LAUNSCHED ARGS:' + args)
     },
 
     appClosed: (sessionId) => {
