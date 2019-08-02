@@ -6,6 +6,8 @@ const db = require('./db')
 const SyncService = require('./sync_service/SyncService').SyncService
 const syncService = new SyncService()
 const getAccessTokenPayload = require('./AccessTokenHelper').getAccessTokenPayload
+const App = require('./schemas/app')
+const AppController = require('./controllers/AppsController');
 
 // MONGODB INITIALIZATION
 db.connect('mongodb://localhost/test', (err) => {
@@ -40,6 +42,9 @@ app.use((req, res, next) => {
 app.use(express.static(__dirname + '/static'))
 app.post('/auth', require('./controllers/AuthController').handleAuthRequest)
 app.post('/signup', require('./controllers/SignupController').handleSignupRequest)
+
+app.get('/apps', AppController.get);
+app.post('/apps', AppController.post);
 
 app.listen(8080, () => console.log(`Server started on port`))
 
