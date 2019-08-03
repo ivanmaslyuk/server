@@ -50,11 +50,7 @@ function _handleWSMessage(message) {
         return
     }
 
-    try {
-        this.onMessage(message)
-    } catch (err) {
-        console.log('onMessage is not set.')
-    }
+    _notifyMessage.call(this, message);
 }
 
 function _performHandshake(sessionId) {
@@ -86,7 +82,7 @@ function _performHandshake(sessionId) {
     }
 
     if (deviceType === 'admin_console') {
-        var accessToken = getCookie('accessToken');
+        var accessToken = localStorage.accessToken;
         if (!accessToken) {
             return console.error('No access token found in cookies. Cannot perform handshake.');
         }
@@ -98,6 +94,12 @@ function _performHandshake(sessionId) {
     this.socket.send(messageString);
 }
 
+function _notifyMessage(msg) {
+    for (const key in this.onMessageCallbacks) {
+        this.onMessageCallbacks[key](msg);
+    }
+}
+
 
 /******************************* CLASS DEFINITION *******************************/
 
@@ -105,7 +107,7 @@ function _performHandshake(sessionId) {
 function SyncServiceFrontend(host, port) {
     this.host = host;
     this.port = port;
-    this.onMessage = null;
+    this.onMessageCallbacks = {};
     this.onSessionTerminated = null;
     this.onConnectionError = null;
     this.handshakeCallback = null;
@@ -136,4 +138,16 @@ SyncServiceFrontend.prototype.sendMessage = function (message) {
     if (this.socket) {
         this.socket.send(JSON.stringify(message));
     }
+}
+
+SyncServiceFrontend.prototype.isConnected = function () {
+    return this.socket && this.socket.readyState == WebSocket.OPEN;
+}
+
+SyncServiceFrontend.prototype.addMessageListener = function (name, callback) {
+    this.onMessageCallbacks[name] = callback;
+}
+
+SyncServiceFrontend.prototype.removeMessageListener = function (name) {
+    delete this.onMessageCallbacks[name];
 }

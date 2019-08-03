@@ -6,6 +6,7 @@ const db = require('./db')
 const SyncService = require('./sync_service/SyncService').SyncService
 const syncService = new SyncService()
 const getAccessTokenPayload = require('./AccessTokenHelper').getAccessTokenPayload
+const AppController = require('./controllers/AppsController');
 
 // MONGODB INITIALIZATION
 db.connect('mongodb://localhost/test', (err) => {
@@ -17,6 +18,12 @@ db.connect('mongodb://localhost/test', (err) => {
 
 // EXPRESS MIDDLEWARE
 app.use(bodyParser.json())
+app.use(function (req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, PUT, PATCH, POST, DELETE");
+    res.header("Access-Control-Allow-Headers", "Content-Type");
+    next();
+});
 app.use((req, res, next) => {
     try {
         const payload = getAccessTokenPayload(req.headers.authorization)
@@ -38,8 +45,12 @@ app.use((req, res, next) => {
 
 // ROUTES
 app.use(express.static(__dirname + '/static'))
-app.post('/auth', require('./controllers/AuthController').handleAuthRequest)
-app.post('/signup', require('./controllers/SignupController').handleSignupRequest)
+app.post('/api/auth', require('./controllers/AuthController').handleAuthRequest)
+app.post('/api/signup', require('./controllers/SignupController').handleSignupRequest)
+
+app.get('/api/apps', AppController.get);
+app.get('/api/apps/:id', AppController.getOne);
+app.post('/api/apps', AppController.post);
 
 app.listen(8080, () => console.log(`Server started on port`))
 
@@ -75,6 +86,40 @@ syncService.subscribe('lie_detector', {
         console.log(`${sessionId} DEVICE DISCONNECTED: ${deviceType} ${deviceName}`)
     }
 
+})
+
+syncService.subscribe('test_app', {
+    appLaunched: (sessionId, args) => {
+        console.log(`${sessionId} APP LAUNCHED with args:`)
+        console.log('lie_detector APP LAUNSCHED ARGS:' + args)
+    },
+
+    appClosed: (sessionId) => {
+        console.log(`${sessionId} APP CLOSED`)
+    },
+
+    sessionTerminated: (sessionId) => {
+        console.log(`${sessionId} SESSION TERMINATED`)
+    },
+
+    handleEvent: (message, deviceName, deviceType, sessionId) => {
+        console.log(`${sessionId} EVENT RECEIVED: ` + message.event + ` from ${deviceType} ${deviceName}`)
+        syncService.getSessionState(sessionId).mobile.forEach(deviceName => {
+            syncService.sendMessageToDevice('mobile', deviceName, sessionId, message)
+        })
+        syncService.sendMessageToDevice('admin_console', null, sessionId, {
+            source: 'test_app',
+            event: "OK!"
+        })
+    },
+
+    deviceConnected: (deviceType, deviceName, sessionId) => {
+        console.log(`${sessionId} DEVICE CONNECTED: ${deviceType} ${deviceName}`)
+    },
+
+    deviceDisconnected: (deviceType, deviceName, sessionId) => {
+        console.log(`${sessionId} DEVICE DISCONNECTED: ${deviceType} ${deviceName}`)
+    }
 })
 
 syncService.listen(3001)
