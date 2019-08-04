@@ -31,7 +31,7 @@ function Session(questions, answers, nextQuestionIndex, nextAnswerIndex, mobileR
 
 describe('LieDetectorController Test', () => {
     let lieDetectorController
-    let _isSessionReserved
+    // let _isSessionReserved
     let _allDevicesConnected
 
     beforeEach(() => {
@@ -47,9 +47,11 @@ describe('LieDetectorController Test', () => {
         }
         lieDetectorController.syncService = {
             sendMessageToDevice(deviceType, deviceName, sessionId, message) { },
-            getSessionState(sessionId) { }
+            getSessionState(sessionId) { },
+            exitCurrentApp(sessionId, message) { }
         }
         sandbox.on(lieDetectorController, ['sendMessageToPhone', 'sendMessageToProjector', 'sendMessageToAdminConsole', 'freeSession'])
+        sandbox.on(lieDetectorController.syncService, ['exitCurrentApp'])
     })
 
     afterEach(() => {
@@ -166,33 +168,25 @@ describe('LieDetectorController Test', () => {
         expect(lieDetectorController.sendMessageToProjector).to.have.been.called.with(sessionId, responseMessage)
     })
 
-    // it('отправляет ошибку телефону и админке если отключился проектор', () => {
-    //     lieDetectorController.sessions[1] = Session()
-    //     const message = Message('device_disconnected')
-    //     message.source = 'system'
-    //     const sessionId = 1
-    //     const responseMessage = Message('game_interrupted', { reason: 'projector_disconnected' })
+    it('отправляет ошибку телефону и админке если отключился проектор', () => {
+        lieDetectorController.sessions[1] = Session()
+        const sessionId = 1
+        chai.spy
 
-    //     lieDetectorController.handleEvent(message, null, 'projector', sessionId)
+        lieDetectorController.deviceDisconnected('projector', null, sessionId)
 
-    //     expect(lieDetectorController.sendMessageToPhone).to.have.been.called.with(sessionId, 'mobile device', responseMessage.event, responseMessage.payload)
-    //     expect(lieDetectorController.sendMessageToAdminConsole).to.have.been.called.with(sessionId, responseMessage.event, responseMessage.payload)
-    // })
+        expect(lieDetectorController.syncService.exitCurrentApp).to.have.been.called.with(sessionId, "Проектор или мобильное устройство отключились от сервиса.")
+    })
 
-    // it('отправляет ошибку проектору и админке если отключился телефон', () => {
-    //     lieDetectorController.sessions['1'] = Session()
-    //     const message = Message('device_disconnected')
-    //     message.source = 'system'
-    //     const deviceName = 'mobile device'
-    //     const deviceType = 'mobile'
-    //     const sessionId = '1'
-    //     const responseMessage = Message('game_interrupted', { reason: 'mobile_disconnected' })
+    it('отправляет ошибку проектору и админке если отключился телефон', () => {
+        lieDetectorController.sessions['1'] = Session()
+        const deviceName = 'mobile device'
+        const sessionId = '1'
 
-    //     lieDetectorController.handleEvent(message, deviceName, deviceType, sessionId)
+        lieDetectorController.deviceDisconnected('mobile', deviceName, sessionId)
 
-    //     expect(lieDetectorController.sendMessageToProjector).to.have.been.called.with(sessionId, responseMessage)
-    //     expect(lieDetectorController.sendMessageToAdminConsole).to.have.been.called.with(sessionId, responseMessage)
-    // })
+        expect(lieDetectorController.syncService.exitCurrentApp).to.have.been.called.with(sessionId, "Проектор или мобильное устройство отключились от сервиса.")
+    })
 
     it('отправляет сообщение проектору и админке, если игрок убрал палец', () => {
         lieDetectorController.sessions['1'] = Session()
@@ -278,23 +272,12 @@ describe('LieDetectorController Test', () => {
         expect(lieDetectorController.sendMessageToProjector).to.have.been.called.with(sessionId, responseMessage)
     })
 
-    // it('возвращает ошибку, если запуск игры был запрошен, когда не все необходимые устройства были подключены', () => {
-    //     _allDevicesConnected = false
-    //     const message = Message('game_launched', {
-    //         questions: [
-    //             'Вопрос 1?',
-    //             'Вопрос 2?',
-    //             'Вопрос 3?'
-    //         ]
-    //     })
-    //     const deviceName = 'admin console'
-    //     const deviceType = 'admin_console'
-    //     const sessionId = '1'
-    //     const responseMessage = Message('game_launch_refused', { reason: 'Necessary devices aren\'t connected.' })
+    it('возвращает ошибку, если запуск игры был запрошен, когда не все необходимые устройства были подключены', () => {
+        _allDevicesConnected = false
+        const sessionId = 1
+        lieDetectorController.appLaunched(sessionId)
 
-    //     lieDetectorController.handleEvent(message, deviceName, deviceType, sessionId)
-
-    //     expect(lieDetectorController.sendMessageToAdminConsole).to.have.been.called.with(sessionId, responseMessage)
-    // })
+        expect(lieDetectorController.syncService.exitCurrentApp).to.have.been.called.with(sessionId, "Проектор и мобильное устройство необходимы для запуска.")
+    })
 
 })
