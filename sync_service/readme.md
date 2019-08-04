@@ -7,12 +7,12 @@ SyncService является оберткой WebSocketServer (а SyncServiceFro
 Для общения приложения используют следующий формат:
 ``` JSON
 {
-    source: "источник события",
-    event: "назваие события",
-    payload: {
-        arg1: "значение",
+    "source": "источник события",
+    "event": "назваие события",
+    "payload": {
+        "arg1": "значение",
         ...
-        arg10: "значение"
+        "arg10": "значение"
     }
 }
 ```
@@ -24,7 +24,7 @@ SyncService является оберткой WebSocketServer (а SyncServiceFro
 ``` JSON
 ...
 payload: { 
-    sessionId: 1001
+    "sessionId": 1001
 }
 ...
 ```
