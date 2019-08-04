@@ -1,35 +1,34 @@
 this.app = {
 
-    appLaunched: () => {
+    appLaunched() {
         var redButton = document.getElementById('red-button');
         var blueButton = document.getElementById('blue-button');
         var greenButton = document.getElementById('green-button');
-        const self = this;
-        redButton.onclick = function (e) {
-            self.sendMessage('red')
+        redButton.onclick = e => {
+            this.sendMessage('red')
         }
-        blueButton.onclick = function (e) {
-            self.sendMessage('blue')
+        blueButton.onclick = e => {
+            this.sendMessage('blue')
         }
-        greenButton.onclick = function (e) {
-            self.sendMessage('green')
+        greenButton.onclick = e => {
+            this.sendMessage('green')
         }
     },
 
-    appClosed: () => {
+    appClosed() {
         console.log("I WAS CLOSED :(")
     },
 
-    handleEvent: (event, payload) => {
+    handleEvent(event, payload) {
         console.log("I RECEIVED EVENT!")
         console.log(event)
     },
 
-    deviceConnected: (deviceType, deviceName) => {
+    deviceConnected(deviceType, deviceName) {
         console.log("HELLO, " + deviceName + " of type " + deviceType)
     },
 
-    deviceDisconnected: (deviceType, deviceName) => {
+    deviceDisconnected(deviceType, deviceName) {
         console.log("GOODBYE, " + deviceName + " of type " + deviceType)
     }
 

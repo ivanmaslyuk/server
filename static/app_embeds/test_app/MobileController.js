@@ -1,23 +1,25 @@
-app = {
+this.app = {
 
-    appLaunched: () => {
-        // отправить ready
+    appLaunched() { },
+
+    appClosed() { },
+
+    handleEvent(event, payload) {
+        var bkg = document.getElementById("background");
+
+        if (event === "red") {
+            bkg.style.backgroundColor = "red";
+        }
+        if (event === "blue") {
+            bkg.style.backgroundColor = "blue";
+        }
+        if (event === "green") {
+            bkg.style.backgroundColor = "green";
+        }
     },
 
-    appClosed: () => {
+    deviceConencted(deviceType, deviceName) { },
 
-    },
-
-    handleEvent: (event, payload) => {
-
-    },
-
-    deviceConencted: (deviceType, deviceName) => {
-
-    },
-
-    deviceDisconnected: (deviceType, deviceName) => {
-
-    }
+    deviceDisconnected(deviceType, deviceName) { }
 
 }

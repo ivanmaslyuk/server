@@ -1,22 +1,22 @@
-app = {
+this.app = {
 
-    appLaunched: () => {
+    appLaunched() {
         // отправить ready
     },
 
-    appClosed: () => {
+    appClosed() {
 
     },
 
-    handleEvent: (event, payload) => {
+    handleEvent(event, payload) {
 
     },
 
-    deviceConencted: (deviceType, deviceName) => {
+    deviceConencted(deviceType, deviceName) {
 
     },
 
-    deviceDisconnected: (deviceType, deviceName) => {
+    deviceDisconnected(deviceType, deviceName) {
 
     }
 

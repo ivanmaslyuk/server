@@ -93,7 +93,6 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
 
                 // проверить, есть ли такая сессия
                 const sessionState = this.getSessionState(payload.sessionId)
-                console.log(sessionState)
                 if (!sessionState.adminConsole) {
                     ws.send(_accessDeniedBecause('Invalid session identifier.'))
                     return ws.close()
@@ -136,9 +135,6 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
                 ws.userId = userId
 
                 ws.send(_accessGranted({ sessionId }))
-                console.log(this.sessionCache)
-                console.log(this.sessionIdsForUserIds)
-                console.log(this.sessionOwners)
                 break
             }
         }
@@ -533,7 +529,8 @@ class SyncService {
      * @param {function} notificationHandler Функция, обрабатывабщая будущие события в этом приложении.
      */
     subscribe(appName, notificationHandler) {
-        this.apps[appName] = notificationHandler
+        notificationHandler.syncService = this;
+        this.apps[appName] = notificationHandler;
     }
 
     /**
@@ -543,6 +540,7 @@ class SyncService {
      * @param {object} message Сообщение, которое необходимо отправить.
      */
     sendMessageToDevice(deviceType, deviceName, sessionId, message) {
+        // console.log(this);
         const internalSessionState = _getSessionCache.call(this, sessionId)
         const messageString = JSON.stringify(message)
 

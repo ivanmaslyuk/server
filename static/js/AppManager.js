@@ -58,7 +58,7 @@ function onConnectionError() {
 }
 
 var syncService = new SyncServiceFrontend('127.0.0.1', 3001);
-syncService.onMessage = onMessage;
+syncService.addMessageListener("main", onMessage);
 syncService.onSessionTerminated = onSessionTerminated;
 syncService.onConnectionError = onConnectionError;
 syncService.connect(printSuccess, 1002);
