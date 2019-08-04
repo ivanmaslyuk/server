@@ -7,6 +7,7 @@ const SyncService = require('./sync_service/SyncService').SyncService
 const syncService = new SyncService()
 const getAccessTokenPayload = require('./AccessTokenHelper').getAccessTokenPayload
 const AppController = require('./controllers/AppsController');
+const TestAppController = require("./app_controllers/TestAppController");
 
 // MONGODB INITIALIZATION
 db.connect('mongodb://localhost/test', (err) => {
@@ -88,38 +89,6 @@ syncService.subscribe('lie_detector', {
 
 })
 
-syncService.subscribe('test_app', {
-    appLaunched: (sessionId, args) => {
-        console.log(`${sessionId} APP LAUNCHED with args:`)
-        console.log('lie_detector APP LAUNSCHED ARGS:' + args)
-    },
-
-    appClosed: (sessionId) => {
-        console.log(`${sessionId} APP CLOSED`)
-    },
-
-    sessionTerminated: (sessionId) => {
-        console.log(`${sessionId} SESSION TERMINATED`)
-    },
-
-    handleEvent: (message, deviceName, deviceType, sessionId) => {
-        console.log(`${sessionId} EVENT RECEIVED: ` + message.event + ` from ${deviceType} ${deviceName}`)
-        syncService.getSessionState(sessionId).mobile.forEach(deviceName => {
-            syncService.sendMessageToDevice('mobile', deviceName, sessionId, message)
-        })
-        syncService.sendMessageToDevice('admin_console', null, sessionId, {
-            source: 'test_app',
-            event: "OK!"
-        })
-    },
-
-    deviceConnected: (deviceType, deviceName, sessionId) => {
-        console.log(`${sessionId} DEVICE CONNECTED: ${deviceType} ${deviceName}`)
-    },
-
-    deviceDisconnected: (deviceType, deviceName, sessionId) => {
-        console.log(`${sessionId} DEVICE DISCONNECTED: ${deviceType} ${deviceName}`)
-    }
-})
+syncService.subscribe('test_app', TestAppController)
 
 syncService.listen(3001)
