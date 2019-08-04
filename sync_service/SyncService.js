@@ -564,6 +564,28 @@ class SyncService {
                 break
         }
     }
+
+    exitCurrentApp(sessionId, message) {
+        if (!this.sessionOwners[sessionId]) { return }
+
+        delete this.sessionOwners[sessionId];
+
+        const session = _getSessionCache.call(this, sessionId);
+        const msg = JSON.stringify({
+            source: 'system',
+            event: 'current_app_exited',
+            payload: {
+                message
+            }
+        });
+        if (session.projector) {
+            session.projector.send(msg);
+        }
+        session.mobile.forEach((device) => {
+            device.send(msg);
+        })
+        session.adminConsole.send(msg);
+    }
 }
 
 module.exports = { SyncService }
