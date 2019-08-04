@@ -542,4 +542,59 @@ describe('SyncService Test', () => {
         expect(projectorConnection.send).to.have.been.called.with(JSON.stringify(appClosedMessage))
     })
 
+    it("оповещает устройства если приложение закрыло само себя", () => {
+        // зарегистрировать обработчик
+        const appController = AppController()
+        syncService.subscribe('app', appController)
+
+        // подключить админку
+        const adminConnection = mockWSS.simulateConnection('admin-ws')
+        adminConnection.simulateMessage(HandshakeMessageWithPayload({
+            deviceType: 'admin_console',
+            accessToken: 'VALID.ACCESS.TOKEN'
+        }))
+        chai.spy.on(adminConnection, 'send')
+
+        // подключить мобильное устройство
+        const mobileConnection = mockWSS.simulateConnection('mobile-ws')
+        mobileConnection.simulateMessage(HandshakeMessageWithPayload({
+            deviceType: 'mobile',
+            sessionId: adminConnection.sessionId
+        }))
+        chai.spy.on(mobileConnection, 'send')
+
+        // подключить проектор
+        const projectorConnection = mockWSS.simulateConnection('projector-ws')
+        projectorConnection.simulateMessage(HandshakeMessageWithPayload({
+            deviceType: 'projector',
+            sessionId: adminConnection.sessionId
+        }))
+        chai.spy.on(projectorConnection, 'send')
+
+        // запустить приложение
+        adminConnection.simulateMessage({
+            source: 'device',
+            event: 'app_launched',
+            payload: {
+                name: 'app',
+                args: { key: 'val' }
+            }
+        })
+
+        // закрыть приложение
+        syncService.exitCurrentApp(adminConnection.sessionId, "reason")
+
+        // проверить
+        const message = JSON.stringify({
+            source: "system",
+            event: "current_app_exited",
+            payload: {
+                message: "reason"
+            }
+        })
+        expect(adminConnection.send).to.have.been.called.with(message)
+        expect(mobileConnection.send).to.have.be.called.with(message)
+        expect(projectorConnection.send).to.have.been.called.with(message)
+    })
+
 })
