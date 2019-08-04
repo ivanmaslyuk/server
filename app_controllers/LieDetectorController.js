@@ -1,4 +1,3 @@
-
 function _handleReadyMessage(session, deviceType) {
     // выставляем устройство как готовое
     switch (deviceType) {
@@ -96,26 +95,11 @@ module.exports = {
         })
     },
 
-    freeSession() {
-        console.log("LIE DETECTOR TRIED TO CLOSE ITSELF")
-        // TODO: доделать эту функцию
-        // this.syncService.exitCurrentApp("Не подключены необходимые устройства.")
-    },
-
     sessions: {},
 
     appLaunched(sessionId, args) {
-        // проверяем подключены ли все необхобимые устройства. Если нет - не запускаем игру
-        const refusal = {
-            source: 'lie_detector',
-            event: 'game_launch_refused',
-            payload: {
-                reason: undefined
-            }
-        }
         if (!this.allNecessaryDevicesConnected(sessionId)) {
-            refusal.payload.reason = 'Necessary devices aren\'t connected.'
-            return this.sendMessageToAdminConsole(sessionId, refusal)
+            return this.syncService.exitCurrentApp(sessionId, "Проектор и мобильное устройство необходимы для запуска.");
         }
 
         // создаем сессию
@@ -191,39 +175,10 @@ module.exports = {
     deviceConnected(deviceType, deviceName, sessionId) { },
 
     deviceDisconnected(deviceType, deviceName, sessionId) {
-        // TODO: убрать это отсюда, когда сделаю syncService.exitCurrentApp
-
         const session = this.sessions[sessionId]
-
-        // отправляем сообщение о неожиданном завершении игры и убиваем игру
-        const _message = {
-            source: 'lie_detector',
-            event: 'game_interrupted',
-            payload: {
-                reason: undefined
-            }
+        if (deviceType === "projector" || deviceName === session.mobileDevice) {
+            delete this.sessions[sessionId];
+            this.syncService.exitCurrentApp(sessionId, "Проектор или мобильное устройство отключились от сервиса.");
         }
-
-        switch (deviceType) {
-            case 'admin_console':
-                _message.payload.reason = 'admin_disconnected'
-                this.sendMessageToPhone(session.id, session.mobileDevice, _message)
-                this.sendMessageToProjector(session.id, _message)
-                break
-            case 'mobile':
-                // проверяем, использовалось ли устройство
-                if (deviceName !== session.mobileDevice) { break }
-                _message.payload.reason = 'mobile_disconnected'
-                this.sendMessageToProjector(session.id, _message)
-                this.sendMessageToAdminConsole(session.id, _message)
-                break
-            case 'projector':
-                _message.payload.reason = 'projector_disconnected'
-                this.sendMessageToAdminConsole(session.id, _message)
-                this.sendMessageToPhone(session.id, session.mobileDevice, _message)
-                break
-        }
-
-        this.freeSession(session.id);
     }
 }
