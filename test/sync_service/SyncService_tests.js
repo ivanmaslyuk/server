@@ -597,4 +597,61 @@ describe('SyncService Test', () => {
         expect(projectorConnection.send).to.have.been.called.with(message)
     })
 
+    it("если мобильник или проектор подключились, когда уже было запущено приложение, оповещает их об этом", () => {
+        // зарегистрировать обработчик
+        const appController = AppController()
+        syncService.subscribe('app', appController)
+
+        // подключить админку
+        const adminConnection = mockWSS.simulateConnection('admin-ws')
+        adminConnection.simulateMessage(HandshakeMessageWithPayload({
+            deviceType: 'admin_console',
+            accessToken: 'VALID.ACCESS.TOKEN'
+        }))
+
+        // запустить приложение
+        adminConnection.simulateMessage({
+            source: 'device',
+            event: 'app_launched',
+            payload: {
+                name: 'app',
+                args: { key: 'val' }
+            }
+        })
+
+        // подключить мобильное устройство
+        const mobileConnection = mockWSS.simulateConnection('mobile-ws')
+        chai.spy.on(mobileConnection, 'send')
+        mobileConnection.simulateMessage(HandshakeMessageWithPayload({
+            deviceType: 'mobile',
+            sessionId: adminConnection.sessionId,
+            deviceModel: "Mobile Device"
+        }))
+
+        // подключить проектор
+        const projectorConnection = mockWSS.simulateConnection('projector-ws')
+        chai.spy.on(projectorConnection, 'send')
+        projectorConnection.simulateMessage(HandshakeMessageWithPayload({
+            deviceType: 'projector',
+            sessionId: adminConnection.sessionId
+        }))
+
+        // проверить
+        expect(mobileConnection.send).to.have.been.called.with(JSON.stringify({
+            source: "system",
+            event: "access_granted",
+            payload: {
+                yourName: "Mobile Device (1)",
+                currentApp: "app"
+            }
+        }))
+        expect(projectorConnection.send).to.have.been.called.with(JSON.stringify({
+            source: "system",
+            event: "access_granted",
+            payload: {
+                currentApp: "app"
+            }
+        }))
+    })
+
 })

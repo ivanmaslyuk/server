@@ -82,7 +82,16 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
                 ws.deviceType = 'mobile'
                 ws.sessionId = payload.sessionId
                 _invalidateSessionCache.call(this, payload.sessionId)
-                ws.send(_accessGranted({ yourName: ws.deviceName }))
+
+                const responsePayload = {
+                    yourName: ws.deviceName,
+                };
+                const currentApp = this.sessionOwners[payload.sessionId];
+                if (currentApp) {
+                    responsePayload.currentApp = currentApp;
+                }
+
+                ws.send(_accessGranted(responsePayload))
                 break
             }
             case 'projector': {
@@ -106,7 +115,10 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
                 ws.deviceType = 'projector'
                 ws.sessionId = payload.sessionId
                 _invalidateSessionCache.call(this, payload.sessionId)
-                ws.send(_accessGranted())
+
+                const currentApp = this.sessionOwners[payload.sessionId];
+
+                ws.send(_accessGranted(currentApp ? { currentApp } : undefined))
                 break
             }
             case 'admin_console': {
