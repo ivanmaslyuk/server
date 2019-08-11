@@ -51,10 +51,14 @@ function _accessGranted(payload) {
  * @param {function} onHandshakeSucceeded Обработчик события завершения handshake.
  */
 function _performHandshake(ws, payload, onHandshakeSucceeded) {
+    console.log("_performHandshake called with payload:");
+    console.log(payload);
+    // console.log(this.sessionCache)
     try {
         // проверяем входные данные
         if (!['mobile', 'admin_console', 'projector'].includes(payload.deviceType)) {
-            // TODO: отправить AccessDeniedBecause('Unknown device type.')
+            ws.send(_accessDeniedBecause('Unknown device type.'))
+            ws.close()
             return
         }
 
@@ -62,7 +66,9 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
         // Добавляем в сокет имя.
         switch (payload.deviceType) {
             case 'mobile': {
+                console.log("it is a mobile device");
                 if (!payload.sessionId) {
+                    console.log("sessionId was not in the payload. denying.");
                     ws.send(_accessDeniedBecause('Invalid session identifier.'))
                     return ws.close()
                 }
@@ -70,6 +76,7 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
                 // проверить, есть ли такая сессия
                 const sessionState = this.getSessionState(payload.sessionId)
                 if (!sessionState.adminConsole) {
+                    console.log("admin console with such sessionId is not connected. denying.")
                     ws.send(_accessDeniedBecause('Invalid session identifier.'))
                     return ws.close()
                 }
@@ -91,11 +98,14 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
                     responsePayload.currentApp = currentApp;
                 }
 
+                console.log("connection approved.");
                 ws.send(_accessGranted(responsePayload))
                 break
             }
             case 'projector': {
+                console.log("it is a projector");
                 if (!payload.sessionId) {
+                    console.log("sessionId was not in the payload. denying.");
                     ws.send(_accessDeniedBecause('Invalid session identifier.'))
                     return ws.close()
                 }
@@ -103,11 +113,13 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
                 // проверить, есть ли такая сессия
                 const sessionState = this.getSessionState(payload.sessionId)
                 if (!sessionState.adminConsole) {
+                    console.log("admin console with such sessionId is not connected. denying.")
                     ws.send(_accessDeniedBecause('Invalid session identifier.'))
                     return ws.close()
                 }
 
                 if (sessionState.projector) {
+                    console.log("projector already connected. denying.");
                     ws.send(_accessDeniedBecause('Projector already connected.'))
                     return ws.close()
                 }
@@ -118,22 +130,27 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
 
                 const currentApp = this.sessionOwners[payload.sessionId];
 
+                console.log("connection approved.");
                 ws.send(_accessGranted(currentApp ? { currentApp } : undefined))
                 break
             }
             case 'admin_console': {
+                console.log("it is an admin console");
                 // проверяем входные данные
                 if (!payload.accessToken) {
+                    console.log("no access token. denying.");
                     return ws.send(_accessDeniedBecause('No access token was provided.'))
                 }
 
                 // проверяем токен
+                console.log("checking access token");
                 const tokenPayload = getAccessTokenPayload(payload.accessToken)
                 const userId = tokenPayload.userId
 
                 // отправляем ошибку если сессия занята
                 let sessionId = this.sessionIdsForUserIds[userId]
                 if (sessionId) {
+                    console.log("max amount of sessions already reached. denying.");
                     ws.send(_accessDeniedBecause('Maximum count of sessions has been reached.'))
                     return ws.close()
                 }
@@ -146,20 +163,23 @@ function _performHandshake(ws, payload, onHandshakeSucceeded) {
                 ws.sessionId = sessionId
                 ws.userId = userId
 
+                console.log("connection approved");
                 ws.send(_accessGranted({ sessionId }))
                 break
             }
         }
-
+        // console.log('about to call onHandshakeSucceeded')
         onHandshakeSucceeded()
     }
     catch (err) {
         if (err.name === 'JsonWebTokenError') {
+            console.log("invalid token. denying connection.")
             // обработка неправильного токена
             ws.send(_accessDeniedBecause('Invalid token.'))
             return ws.close()
         }
         else {
+            console.log('error when trying to perform handshake')
             console.log(err)
             return ws.close()
         }
@@ -181,12 +201,13 @@ function _getCurrentApp(sessionId) {
  * @param {WebSocket} ws WebSocket, который подключился.
  */
 function _notifyDeviceConnected(ws) {
+    console.log(`_notifyDeviceConnected called for WS ${ws.sessionId} ${ws.deviceType} (name: ${ws.deviceName})`);
     // если отключилась админка, оповещать еще некого
     if (ws.deviceType === 'admin_console') { return }
 
     // если подключилось моб. устройство или проектор, оповестить админку и текущее приложение
-
-    const adminConsoleConnection = _getSessionCache.call(this, ws.sessionId).adminConsole
+    const sessionCache = _getSessionCache.call(this, ws.sessionId)
+    const adminConsoleConnection = sessionCache.adminConsole
     const currentApp = _getCurrentApp.call(this, ws.sessionId)
 
     if (ws.deviceType === 'mobile') {
@@ -307,6 +328,10 @@ function _handleIncomingMessage(ws, messageString) {
         console.log(err)
         // TODO: отправить ошибку 'Message was not valid JSON.'
         return
+    }
+
+    if (messageObject.payload && messageObject.payload.sessionId) {
+        messageObject.payload.sessionId = parseInt(messageObject.payload.sessionId);
     }
 
     // проверяем целостность полученных от клиента данных
@@ -437,14 +462,17 @@ function _handleClientClosed(ws) {
 }
 
 function _invalidateSessionCache(sessionId) {
+    console.log(`_invalidateSessionCache called for session ${sessionId}`)
     delete this.sessionCache[sessionId]
 }
 
 function _getSessionCache(sessionId) {
+    console.log(`_getSessionCache called for session ${sessionId}`)
     if (this.sessionCache[sessionId]) {
+        console.log("_getSessionCache: returning cached state")
         return this.sessionCache[sessionId]
     }
-
+    console.log("_getSessionCache: computing state")
     // считаем состояние
     const cache = {
         projector: undefined,
@@ -470,6 +498,12 @@ function _getSessionCache(sessionId) {
 
     // кэшируем и возвращаем
     this.sessionCache[sessionId] = cache
+    const newState = [];
+    for (const sid in this.sessionCache) {
+        const val = this.sessionCache[sid]
+        newState.push({ sessionId: sid, deviceType: val.deviceType, deviceName: val.deviceName });
+    }
+    console.log(newState)
     return cache
 }
 
@@ -500,10 +534,17 @@ class SyncService {
         this.wss.on('connection', (ws) => {
             // TODO: НЕ ПОЗВОЛЯТЬ ПОДКЮЧАТЬ БОЛЬШЕ 10 УСТРОЙСТВ ДЛЯ ИЗБЕЖАНИЯ DDOS ?
             ws.on('message', (messageString) => {
-                _handleIncomingMessage.call(this, ws, messageString)
+                try {
+                    console.log('received message');
+                    _handleIncomingMessage.call(this, ws, messageString)
+                } catch (err) {
+                    console.log('error during handling of message');
+                    console.log(err);
+                }
             })
 
             ws.on('close', () => {
+                console.log(`WS closed: ${ws.sessionId} ${ws.deviceType} (name: ${ws.deviceName})`);
                 _handleClientClosed.call(this, ws)
             })
 
