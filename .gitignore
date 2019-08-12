@@ -80,3 +80,5 @@ typings/
 .vscode/
 
 .eslintrc.json
+
+/static/

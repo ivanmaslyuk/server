@@ -45,7 +45,11 @@ app.use((req, res, next) => {
 
 
 // ROUTES
-app.use(express.static(__dirname + '/static'))
+app.get('/mobile', (req, res) => res.redirect('/#/mobile'));
+app.get('/projector', (req, res) => res.redirect('/#/projector'));
+app.use(express.static(__dirname + '/static'));
+
+// ENDPOINTS
 app.post('/api/auth', require('./controllers/AuthController').handleAuthRequest)
 app.post('/api/signup', require('./controllers/SignupController').handleSignupRequest)
 
