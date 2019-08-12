@@ -9,10 +9,7 @@ module.exports = {
         this.syncService.getSessionState(sessionId).mobile.forEach(deviceName => {
             this.syncService.sendMessageToDevice('mobile', deviceName, sessionId, message)
         })
-        this.syncService.sendMessageToDevice('admin_console', null, sessionId, {
-            source: 'test_app',
-            event: "OK!"
-        })
+        this.syncService.sendMessageToDevice("projector", null, sessionId, message)
     },
 
     deviceConnected(deviceType, deviceName, sessionId) { },
