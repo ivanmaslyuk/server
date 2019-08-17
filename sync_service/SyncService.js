@@ -407,7 +407,7 @@ function _handleClientClosed(ws) {
         sessionCache.mobile.forEach(function (mobileWS) {
             console.log(`Notifying and disconnecting mobile device ${mobileWS.deviceName} from terminated session ${mobileWS.sessionId}.`);
             mobileWS.send(msg)
-            ws.close()
+            mobileWS.close()
         })
 
         // оповестить проектор и закрыть его сокет
