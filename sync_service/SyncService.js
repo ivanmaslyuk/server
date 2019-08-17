@@ -202,6 +202,7 @@ function _getCurrentApp(sessionId) {
  */
 function _notifyDeviceConnected(ws) {
     console.log(`_notifyDeviceConnected called for WS ${ws.sessionId} ${ws.deviceType} (name: ${ws.deviceName})`);
+
     // если отключилась админка, оповещать еще некого
     if (ws.deviceType === 'admin_console') { return }
 
@@ -381,6 +382,7 @@ function _handleIncomingMessage(ws, messageString) {
  * @param {WebSocket} ws WebSocket, который отключился.
  */
 function _handleClientClosed(ws) {
+    console.log(`WS closed: ${ws.sessionId} ${ws.deviceType} (name: ${ws.deviceName})`);
     if (!ws.sessionId) { return }
 
     const currentApp = _getCurrentApp.call(this, ws.sessionId)
@@ -388,25 +390,30 @@ function _handleClientClosed(ws) {
     const sessionCache = _getSessionCache.call(this, ws.sessionId)
 
     if (ws.deviceType === 'admin_console') {
+        console.log(`Admin console disconnected for session ${ws.sessionId}`);
+
         // оповестить приложение
         if (currentApp) {
+            console.log(`Calling sessionTerminated hook for current app in session ${ws.sessionId}`);
             currentApp.sessionTerminated(ws.sessionId)
         }
 
         // оповестить мобильные устройства и закрыть их сокеты
-        const msg = {
+        const msg = JSON.stringify({
             source: 'system',
             event: 'session_terminated',
             payload: { reason: 'Admin console disconnected unexpectedly.' }
-        }
-        sessionCache.mobile.forEach((ws) => {
-            ws.send(JSON.stringify(msg))
-            ws.close()
+        })
+        sessionCache.mobile.forEach(function (mobileWS) {
+            console.log(`Notifying and disconnecting mobile device ${mobileWS.deviceName} from terminated session ${mobileWS.sessionId}.`);
+            mobileWS.send(msg)
+            mobileWS.close()
         })
 
         // оповестить проектор и закрыть его сокет
         if (sessionCache.projector) {
-            sessionCache.projector.send(JSON.stringify(msg))
+            console.log(`Notifying and disconnecting projector in terminated session ${ws.sessionId}.`);
+            sessionCache.projector.send(msg)
             sessionCache.projector.close()
         }
 
@@ -462,8 +469,8 @@ function _handleClientClosed(ws) {
 }
 
 function _invalidateSessionCache(sessionId) {
-    console.log(`_invalidateSessionCache called for session ${sessionId}`)
     delete this.sessionCache[sessionId]
+    console.log(`Cache for session ${sessionId} has been invalidated.`);
 }
 
 function _getSessionCache(sessionId) {
@@ -481,7 +488,7 @@ function _getSessionCache(sessionId) {
     }
 
     for (const ws of this.wss.clients) {
-        if (ws.sessionId === sessionId) {
+        if (ws.sessionId == sessionId) {
             switch (ws.deviceType) {
                 case 'mobile':
                     cache.mobile.push(ws)
@@ -496,14 +503,21 @@ function _getSessionCache(sessionId) {
         }
     }
 
-    // кэшируем и возвращаем
     this.sessionCache[sessionId] = cache
-    const newState = [];
-    for (const sid in this.sessionCache) {
-        const val = this.sessionCache[sid]
-        newState.push({ sessionId: sid, deviceType: val.deviceType, deviceName: val.deviceName });
+
+    const newStateFormatted = {
+        projector: undefined,
+        adminConsole: undefined,
+        mobile: []
     }
-    console.log(newState)
+    newStateFormatted.projector = cache.projector ? true : false
+    newStateFormatted.adminConsole = cache.adminConsole ? true : false
+    cache.mobile.forEach((mobileDevice) => {
+        newStateFormatted.mobile.push(mobileDevice.deviceName)
+    })
+    console.log(newStateFormatted);
+    console.log(`WS clients connected: ${this.wss.clients.size}`);
+
     return cache
 }
 
@@ -544,7 +558,6 @@ class SyncService {
             })
 
             ws.on('close', () => {
-                console.log(`WS closed: ${ws.sessionId} ${ws.deviceType} (name: ${ws.deviceName})`);
                 _handleClientClosed.call(this, ws)
             })
 
