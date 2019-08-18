@@ -5,6 +5,7 @@ module.exports.fetchPostsByHashtag = async function (hashtag, maxId) {
     if (maxId) {
         url += `&max_id=${maxId}`;
     }
+    url = encodeURI(url);
 
     try {
         const response = await axios.get(url);
