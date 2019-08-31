@@ -106,8 +106,8 @@ module.exports = {
         const session = {
             id: 0,
             questions: [],
-            nextQuestionIndex: 0,
-            nextAnswerIndex: 0,
+            nextQuestionIndex: 1,
+            nextAnswerIndex: 1,
             results: [],
             mobileDevice: undefined,
             mobileDeviceReady: false,
