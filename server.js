@@ -1,13 +1,12 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const app = express()
-const User = require('./schemas/user')
 const db = require('./db')
-const SyncService = require('./sync_service/SyncService').SyncService
-const syncService = new SyncService()
-const getAccessTokenPayload = require('./AccessTokenHelper').getAccessTokenPayload
+const { SyncService } = require('./sync_service/SyncService')
 const AppController = require('./controllers/AppsController');
 const TestAppController = require("./app_controllers/TestAppController");
+const LieDetectorAppController = require("./app_controllers/TestAppController");
+const { AccessTokenMiddleware } = require("./middleware");
 
 // MONGODB INITIALIZATION
 db.connect('mongodb://localhost/test', (err) => {
@@ -17,7 +16,7 @@ db.connect('mongodb://localhost/test', (err) => {
     console.log('Connected to MongoDB')
 })
 
-// EXPRESS MIDDLEWARE
+// MIDDLEWARE
 app.use(bodyParser.json())
 app.use(function (req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
@@ -25,24 +24,7 @@ app.use(function (req, res, next) {
     res.header("Access-Control-Allow-Headers", "Content-Type");
     next();
 });
-app.use((req, res, next) => {
-    try {
-        const payload = getAccessTokenPayload(req.headers.authorization)
-        if (payload) {
-            User.findById(payload.userId).then(
-                (doc) => {
-                    req.user = doc
-                    next()
-                }
-            )
-        } else {
-            next()
-        }
-    } catch (e) {
-        next()
-    }
-})
-
+app.use(AccessTokenMiddleware);
 
 // ROUTES
 app.get('/mobile', (req, res) => res.redirect('/#/mobile'));
@@ -57,42 +39,10 @@ app.get('/api/apps', AppController.get);
 app.get('/api/apps/:id', AppController.getOne);
 app.post('/api/apps', AppController.post);
 
-app.listen(8080, () => console.log(`Server started on port`))
+app.listen(8080, () => console.log(`Server started on port 8080`));
 
-
-
-
-
-
-syncService.subscribe('lie_detector', {
-
-    appLaunched: (sessionId, args) => {
-        console.log(`${sessionId} APP LAUNCHED with args:`)
-        console.log('lie_detector APP LAUNSCHED ARGS:' + args)
-    },
-
-    appClosed: (sessionId) => {
-        console.log(`${sessionId} APP CLOSED`)
-    },
-
-    sessionTerminated: (sessionId) => {
-        console.log(`${sessionId} SESSION TERMINATED`)
-    },
-
-    handleEvent: (message, deviceName, deviceType, sessionId) => {
-        console.log(`${sessionId} EVENT RECEIVED: ` + message.event + ` from ${deviceType} ${deviceName}`)
-    },
-
-    deviceConnected: (deviceType, deviceName, sessionId) => {
-        console.log(`${sessionId} DEVICE CONNECTED: ${deviceType} ${deviceName}`)
-    },
-
-    deviceDisconnected: (deviceType, deviceName, sessionId) => {
-        console.log(`${sessionId} DEVICE DISCONNECTED: ${deviceType} ${deviceName}`)
-    }
-
-})
-
-syncService.subscribe('test_app', TestAppController)
-
-syncService.listen(3001)
+// APPS
+const syncService = new SyncService();
+syncService.subscribe('lie_detector', LieDetectorAppController);
+syncService.subscribe('test_app', TestAppController);
+syncService.listen(3001);
