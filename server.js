@@ -5,7 +5,7 @@ const db = require('./db')
 const { SyncService } = require('./sync_service/SyncService')
 const AppController = require('./controllers/AppsController');
 const TestAppController = require("./app_controllers/TestAppController");
-const LieDetectorAppController = require("./app_controllers/TestAppController");
+const LieDetectorAppController = require("./app_controllers/LieDetectorController");
 const { AccessTokenMiddleware } = require("./middleware");
 
 // MONGODB INITIALIZATION
