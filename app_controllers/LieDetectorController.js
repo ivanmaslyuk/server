@@ -148,11 +148,11 @@ module.exports = {
                 }
                 break
             case 'player_removed_finger':
-                this.sendMessageToProjector(sessionId, message)
+                this.sendMessageToProjector(sessionId, message.event)
                 this.sendMessageToAdminConsole(sessionId, message.event)
                 break
             case 'player_placed_finger':
-                this.sendMessageToProjector(sessionId, message)
+                this.sendMessageToProjector(sessionId, message.event)
                 this.sendMessageToAdminConsole(sessionId, message.event)
                 break
             case 'ready':
