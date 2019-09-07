@@ -12,13 +12,9 @@ function _handleReadyMessage(session, deviceType) {
     // проверяем, подключились ли все устройства
     const allDevicesReady = session.projectorReady && session.mobileReady
     if (allDevicesReady) {
-        const message = {
-            source: 'lie_detector',
-            event: 'all_devices_ready'
-        }
-        this.sendMessageToPhone(session.id, session.mobileDevice, message)
-        this.sendMessageToProjector(session.id, message)
-        this.sendMessageToAdminConsole(session.id, message)
+        this.sendMessageToPhone(session.id, session.mobileDevice, message.event, message.payload)
+        this.sendMessageToProjector(session.id, message.event, message.payload)
+        this.sendMessageToAdminConsole(session.id, 'all_devices_ready')
     }
 }
 
@@ -38,28 +34,27 @@ function _handleQuestionAnswered(session) {
 
     session.nextQuestionIndex++
 
-    this.sendMessageToPhone(session.id, session.mobileDevice, message)
-    this.sendMessageToProjector(session.id, message)
+    this.sendMessageToPhone(session.id, session.mobileDevice, message.event, message.payload)
+    this.sendMessageToProjector(session.id, message.event, message.payload)
 }
 
 function _handleAnswerSkipped(session) {
     const nextAnswer = session.results[session.nextAnswerIndex]
 
-    const message = {
-        source: 'lie_detector'
-    }
+    const event = '';
+    const payload = null;
 
     if (session.nextAnswerIndex < session.results.length) {
-        message.event = 'next_answer_shown'
-        message.payload = { answer: nextAnswer }
+        event = 'next_answer_shown';
+        payload = { answer: nextAnswer };
     } else {
-        message.event = 'answers_ended'
+        event = 'answers_ended';
     }
 
     session.nextAnswerIndex++
 
-    this.sendMessageToPhone(session.id, session.mobileDevice, message)
-    this.sendMessageToProjector(session.id, message)
+    this.sendMessageToPhone(session.id, session.mobileDevice, event, payload)
+    this.sendMessageToProjector(session.id, event, payload)
 }
 
 module.exports = {
@@ -135,8 +130,8 @@ module.exports = {
 
         switch (message.event) {
             case 'new_pulse_value':
-                this.sendMessageToPhone(sessionId, session.mobileDevice, message)
-                this.sendMessageToProjector(sessionId, message)
+                this.sendMessageToPhone(sessionId, session.mobileDevice, message.event, message.payload)
+                this.sendMessageToProjector(sessionId, message.event, message.payload)
                 break
             case 'truth_selected':
                 // предотвратить возможность записи ответа если все ответы уже записаны
@@ -154,11 +149,11 @@ module.exports = {
                 break
             case 'player_removed_finger':
                 this.sendMessageToProjector(sessionId, message)
-                this.sendMessageToAdminConsole(sessionId, message)
+                this.sendMessageToAdminConsole(sessionId, message.event)
                 break
             case 'player_placed_finger':
                 this.sendMessageToProjector(sessionId, message)
-                this.sendMessageToAdminConsole(sessionId, message)
+                this.sendMessageToAdminConsole(sessionId, message.event)
                 break
             case 'ready':
                 _handleReadyMessage.call(this, session, deviceType)
