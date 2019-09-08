@@ -41,8 +41,8 @@ function _handleQuestionAnswered(session) {
 function _handleAnswerSkipped(session) {
     const nextAnswer = session.results[session.nextAnswerIndex]
 
-    const event = '';
-    const payload = null;
+    let event = '';
+    let payload = null;
 
     if (session.nextAnswerIndex < session.results.length) {
         event = 'next_answer_shown';
