@@ -1,65 +1,39 @@
-function _handleReadyMessage(session, deviceType) {
-    // выставляем устройство как готовое
-    switch (deviceType) {
-        case 'mobile':
-            session.mobileReady = true
-            break
-        case 'projector':
-            session.projectorReady = true
-            break
-    }
-
-    // проверяем, подключились ли все устройства
-    const allDevicesReady = session.projectorReady && session.mobileReady
-    if (allDevicesReady) {
-        this.sendMessageToPhone(session.id, session.mobileDevice, message.event, message.payload)
-        this.sendMessageToProjector(session.id, message.event, message.payload)
-        this.sendMessageToAdminConsole(session.id, 'all_devices_ready')
-    }
-}
-
 function _handleQuestionAnswered(session) {
-    const nextQuestion = session.questions[session.nextQuestionIndex]
-
-    const message = {
-        source: 'lie_detector'
-    }
+    let evt = '';
+    let payload = {};
 
     if (session.nextQuestionIndex < session.questions.length) {
-        message.event = 'next_question_shown'
-        message.payload = { question: nextQuestion }
+        evt = 'next_question_shown'
     } else {
-        message.event = 'questions_ended'
+        evt = 'questions_ended'
+        payload = {
+            results: session.results
+        }
     }
 
     session.nextQuestionIndex++
 
-    this.sendMessageToPhone(session.id, session.mobileDevice, message.event, message.payload)
-    this.sendMessageToProjector(session.id, message.event, message.payload)
+    this.sendMessageToPhone(session.id, session.mobileDevice, evt)
+    this.sendMessageToProjector(session.id, evt, payload)
 }
 
 function _handleAnswerSkipped(session) {
-    const nextAnswer = session.results[session.nextAnswerIndex]
+    session.nextAnswerIndex++;
 
     let event = '';
-    let payload = null;
-
-    if (session.nextAnswerIndex < session.results.length) {
+    if (session.nextAnswerIndex <= session.results.length) {
         event = 'next_answer_shown';
-        payload = { answer: nextAnswer };
     } else {
         event = 'answers_ended';
     }
 
-    session.nextAnswerIndex++
-
-    this.sendMessageToPhone(session.id, session.mobileDevice, event, payload)
-    this.sendMessageToProjector(session.id, event, payload)
+    this.sendMessageToPhone(session.id, session.mobileDevice, event)
+    this.sendMessageToProjector(session.id, event)
 }
 
 module.exports = {
     chooseMobileDevice(sessionId) {
-        return this.syncService.getSessionState(sessionId).mobile.length > 0;
+        return this.syncService.getSessionState(sessionId).mobile[0];
     },
 
     allNecessaryDevicesConnected(sessionId) {
@@ -125,7 +99,6 @@ module.exports = {
     },
 
     handleEvent(message, deviceName, deviceType, sessionId) {
-        // пускаем ниже только если для запроса есть сессия или он о начале игры
         const session = this.sessions[sessionId]
 
         switch (message.event) {
@@ -133,17 +106,12 @@ module.exports = {
                 this.sendMessageToPhone(sessionId, session.mobileDevice, message.event, message.payload)
                 this.sendMessageToProjector(sessionId, message.event, message.payload)
                 break
-            case 'truth_selected':
-                // предотвратить возможность записи ответа если все ответы уже записаны
+            case 'question_answered':
                 if (session.results.length <= session.questions.length) {
-                    session.results.push(true)
-                    _handleQuestionAnswered.call(this, session)
-                }
-                break
-            case 'lie_selected':
-                // предотвратить возможность записи ответа если все ответы уже записаны
-                if (session.results.length <= session.questions.length) {
-                    session.results.push(false)
+                    session.results.push({
+                        truth: message.payload.truth,
+                        answer: message.payload.answer
+                    })
                     _handleQuestionAnswered.call(this, session)
                 }
                 break
@@ -155,11 +123,11 @@ module.exports = {
                 this.sendMessageToProjector(sessionId, message.event)
                 this.sendMessageToAdminConsole(sessionId, message.event)
                 break
-            case 'ready':
-                _handleReadyMessage.call(this, session, deviceType)
-                break
+            case 'started_showing_results':
+                this.sendMessageToProjector(sessionId, message.event)
+                this.sendMessageToAdminConsole(sessionId, message.event)
+                break;
             case 'answer_skipped':
-                // проверить закончились ли все вопросы
                 if (session.results.length == session.questions.length) {
                     _handleAnswerSkipped.call(this, session)
                 }
